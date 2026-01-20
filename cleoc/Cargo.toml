@@ -1,0 +1,11 @@
+[package]
+name = "cleoc"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = ["ast", "lexer", "parser"]
+
+[dependencies]
+parser = { path = "./parser" }
+ast = { path = "./ast" }

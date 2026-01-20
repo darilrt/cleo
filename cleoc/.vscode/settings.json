@@ -1,0 +1,6 @@
+{
+    "rust-analyzer.runnables.extraEnv": {
+        "PATH": "/home/daril/.cargo/bin:${env:PATH}"
+    },
+    "editor.inlayHints.enabled": "onUnlessPressed"
+}
