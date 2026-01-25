@@ -2,6 +2,7 @@ use chumsky::{
     Boxed, IterParser, Parser, extra,
     input::ValueInput,
     prelude::{Recursive, just, recursive},
+    select,
     span::SimpleSpan,
 };
 use lexer::TokenKind;
@@ -22,7 +23,7 @@ pub enum Type {
     Array(usize, Box<Type>),
 }
 
-// path := segment ("." segment)*
+// type := array ptr path
 pub fn ptype_impl<'tokens, 'src: 'tokens, I>(
     path: impl chumsky::Parser<'tokens, I, Path, extra::Err<ParserError<'tokens, 'src>>> + Clone,
 ) -> impl Parser<'tokens, I, Type, extra::Err<ParserError<'tokens, 'src>>> + Clone
@@ -34,22 +35,15 @@ where
         ConstPtr,
     }
 
-    //
+    // array := ("[" usize "]")*
+    let array = select! {
+        TokenKind::Integer(value) => value.parse::<usize>().unwrap(),
+    }
+    .delimited_by(just(TokenKind::LeftBracket), just(TokenKind::RightBracket))
+    .repeated()
+    .collect::<Vec<usize>>();
 
-    // array := ("[" expr "]")*
-    let array = expr::<I>()
-        .delimited_by(just(TokenKind::LeftBracket), just(TokenKind::RightBracket))
-        .map(|e| {
-            if let crate::parser::expr::Expr::Value(crate::parser::expr::Value::Integer(s)) = e {
-                s.parse::<usize>().unwrap()
-            } else {
-                0
-            }
-        })
-        .repeated()
-        .collect::<Vec<usize>>();
-
-    // ptr := ("*" | ("*" "const"))+
+    // ptr := ("*" | ("*" "const"))*
     let ptr = just(TokenKind::Asterisk)
         .then(just(TokenKind::Const).or_not())
         .map(|(_, opt_const)| match opt_const {
@@ -155,7 +149,9 @@ mod test {
 
     #[test]
     fn test_type() {
-        let test = test_parse("[1][5]*const A[*u8, i32]").unwrap();
+        let test = test_parse("[1][5]*const A.B[*u8, i32]").unwrap();
+
+        println!("{:?}", test);
 
         assert_eq!(
             test,
@@ -164,29 +160,37 @@ mod test {
                 Box::new(Type::Array(
                     5,
                     Box::new(Type::ConstPtr(Box::new(Type::Path(Path {
-                        segments: vec![Segment {
-                            name: Ident {
-                                name: "A".to_string(),
+                        segments: vec![
+                            Segment {
+                                name: Ident {
+                                    name: "A".to_string(),
+                                },
+                                generics: None,
                             },
-                            generics: Some(vec![
-                                Type::Ptr(Box::new(Type::Path(Path {
-                                    segments: vec![Segment {
-                                        name: Ident {
-                                            name: "u8".to_string(),
-                                        },
-                                        generics: None,
-                                    }]
-                                }))),
-                                Type::Path(Path {
-                                    segments: vec![Segment {
-                                        name: Ident {
-                                            name: "i32".to_string(),
-                                        },
-                                        generics: None,
-                                    }]
-                                }),
-                            ]),
-                        }]
+                            Segment {
+                                name: Ident {
+                                    name: "B".to_string(),
+                                },
+                                generics: Some(vec![
+                                    Type::Ptr(Box::new(Type::Path(Path {
+                                        segments: vec![Segment {
+                                            name: Ident {
+                                                name: "u8".to_string(),
+                                            },
+                                            generics: None,
+                                        }]
+                                    }))),
+                                    Type::Path(Path {
+                                        segments: vec![Segment {
+                                            name: Ident {
+                                                name: "i32".to_string(),
+                                            },
+                                            generics: None,
+                                        }]
+                                    }),
+                                ]),
+                            }
+                        ]
                     }))))
                 ))
             )

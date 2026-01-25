@@ -11,6 +11,7 @@ use crate::{
         path::{Path, path_impl},
         ptype::ptype_impl,
     },
+    path_parser,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,7 +43,7 @@ pub enum Operator {
 
 fn_parser!(expr -> Expr {
     recursive(|expr| {
-        // factor := integer | float | string | bool | "(" expr ")"
+        // factor := integer | float | string | bool | "(" expr ")" | path
         let factor = select! {
             TokenKind::Integer(v) => Expr::Value(Value::Integer(v.to_string())),
             TokenKind::Float(v) => Expr::Value(Value::Float(v.to_string())),
@@ -53,11 +54,12 @@ fn_parser!(expr -> Expr {
                 just(TokenKind::LeftParen),
                 just(TokenKind::RightParen)
             )
-        ).or(
-            recursive(|path| {
-                let ptype_parser = ptype_impl(path.clone());
-                path_impl(ptype_parser)
-            }).map(|p| {
+        )
+        .or(
+        //     recursive(|path| {
+        //         let ptype_parser = ptype_impl(path.clone());
+        //         path_impl(ptype_parser)
+            path_parser!().map(|p| {
                 Expr::Value(Value::Path(p))
             })
         );
