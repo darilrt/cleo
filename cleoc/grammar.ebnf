@@ -1,0 +1,8 @@
+
+path ::= segment ("." segment)*
+segment ::= ident [ "[" generic_list "]" ]
+generic_list ::= type ("," type)*
+
+type ::= array ptr path
+array ::= ("[" usize "]")*
+ptr ::= ("*" | ("*" "const"))*
