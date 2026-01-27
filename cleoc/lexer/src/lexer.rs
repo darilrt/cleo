@@ -83,7 +83,8 @@ pub fn lex<'a>(src: &'a str) -> Result<Vec<Token<'a>>, LexerError> {
                     | TokenKind::PlusPlus
                     | TokenKind::MinusMinus
                     | TokenKind::RightParen
-                    | TokenKind::RightBracket => {
+                    | TokenKind::RightBracket
+                    | TokenKind::RightBrace => {
                         let new_token = Token {
                             kind: TokenKind::Semicolon,
                             lexeme: Cow::Borrowed(";"),
@@ -111,18 +112,11 @@ pub fn lex<'a>(src: &'a str) -> Result<Vec<Token<'a>>, LexerError> {
 mod test {
     #[test]
     fn test_lex_simple() {
-        // let source = "let x =  10\nprint(x)";
-        // let tokens = super::lex(source).unwrap();
+        let source = "let x =  Foo { .a = 10 }\nvar print(x)";
+        let tokens = super::lex(source).unwrap();
 
-        // assert_eq!(tokens.len(), 9);
-        // assert_eq!(tokens.get(0).unwrap().kind, super::TokenKind::Let);
-        // assert_eq!(tokens.get(1).unwrap().kind, super::TokenKind::Ident);
-        // assert_eq!(tokens.get(2).unwrap().kind, super::TokenKind::Equal);
-        // assert_eq!(tokens.get(3).unwrap().kind, super::TokenKind::Integer("10"));
-        // assert_eq!(tokens.get(4).unwrap().kind, super::TokenKind::Semicolon);
-        // assert_eq!(tokens.get(5).unwrap().kind, super::TokenKind::Ident);
-        // assert_eq!(tokens.get(6).unwrap().kind, super::TokenKind::LeftParen);
-        // assert_eq!(tokens.get(7).unwrap().kind, super::TokenKind::Ident);
-        // assert_eq!(tokens.get(8).unwrap().kind, super::TokenKind::RightParen);
+        for tok in tokens {
+            println!("{:?}", tok.kind);
+        }
     }
 }

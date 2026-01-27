@@ -3,28 +3,26 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parsers::expr::{Expr, expr},
+    parsers::{
+        expr::Expr,
+        local::{LocalDecl, local_impl},
+    },
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Expr(Expr),
+    Local(LocalDecl),
 }
 
-// stmt = expr;
+// stmt = local | expr;
 pub fn stmt_impl<'tokens, 'src: 'tokens, I>(
     expr: impl Parser<'tokens, I, Expr, extra::Err<ParserError<'tokens, 'src>>> + Clone,
 ) -> impl Parser<'tokens, I, Stmt, extra::Err<ParserError<'tokens, 'src>>> + Clone
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
-    expr.map(Stmt::Expr)
-}
-
-pub fn stmt<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Stmt, extra::Err<ParserError<'tokens, 'src>>> + Clone
-where
-    I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
-{
-    stmt_impl(expr())
+    local_impl(expr.clone())
+        .map(Stmt::Local)
+        .or(expr.map(Stmt::Expr))
 }

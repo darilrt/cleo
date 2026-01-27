@@ -8,9 +8,11 @@ use chumsky::{
 use lexer::TokenKind;
 
 use crate::{
+    ast::{Ident, Type},
     errors::ParserError,
     parsers::{
         block::{Block, block_impl},
+        ident::ident,
         path::{PathExpr, Segment, segment},
     },
     path_parser, type_parser,
@@ -32,6 +34,43 @@ pub enum Expr {
     Access(ExprAccess),
     Path(PathExpr),
     If(ExprIf),
+    Init(ExprInit),
+    Cast(ExprCast),
+    Assign(ExprAssign),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprAssign {
+    pub left: Box<Expr>,
+    pub kind: AssignKind,
+    pub right: Box<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssignKind {
+    Equal,    // =
+    AddEqual, // +=
+    SubEqual, // -=
+    MulEqual, // *=
+    DivEqual, // /=
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprCast {
+    pub expr: Box<Expr>,
+    pub to_type: Box<Type>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprInit {
+    pub path: PathExpr,
+    pub fields: Vec<ExprInitField>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprInitField {
+    pub name: Ident,
+    pub value: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,9 +111,19 @@ pub enum Operator {
     Ref,   // &
     Neg,   // -
     Not,   // !
+
+    Equal,        // ==
+    NotEqual,     // !=
+    Less,         // <
+    Greater,      // >
+    LessEqual,    // <=
+    GreaterEqual, // >=
+
+    And, // &&
+    Or,  // ||
 }
 
-// expr = if
+// expr = if_expr | addition;
 pub fn expr<'tokens, 'src: 'tokens, I>()
 -> impl Parser<'tokens, I, Expr, extra::Err<ParserError<'tokens, 'src>>> + Clone
 where
@@ -82,6 +131,28 @@ where
 {
     recursive(|expr| {
         let block = block_impl(expr.clone());
+        let path = path_parser!();
+        let ptype = type_parser!();
+
+        let struct_init_fields = just(TokenKind::Dot)
+            .ignore_then(ident())
+            .then_ignore(just(TokenKind::Equal))
+            .then(expr.clone())
+            .map(|(seg, value)| ExprInitField {
+                name: seg,
+                value: Box::new(value),
+            });
+
+        let struct_init = path
+            .clone()
+            .then(
+                struct_init_fields
+                    .separated_by(just(TokenKind::Comma))
+                    .allow_trailing()
+                    .collect()
+                    .delimited_by(just(TokenKind::LeftBrace), just(TokenKind::RightBrace)),
+            )
+            .map(|(path, fields)| ExprInit { path, fields });
 
         // Control Flow
         let if_expr = just(TokenKind::If)
@@ -96,7 +167,7 @@ where
                 })
             });
 
-        // primary := integer | float | string | bool | "(" expr ")" | path
+        // primary := integer | float | string | bool | "(" expr ")" | strcut_init | path
         let primary = select! {
             TokenKind::Integer(v) => Expr::Value(ExprValue::Integer(v.to_string())),
             TokenKind::Float(v) => Expr::Value(ExprValue::Float(v.to_string())),
@@ -106,7 +177,8 @@ where
         .or(expr
             .clone()
             .delimited_by(just(TokenKind::LeftParen), just(TokenKind::RightParen)))
-        .or(path_parser!().map(Expr::Path));
+        .or(struct_init.map(Expr::Init))
+        .or(path.clone().map(Expr::Path));
 
         // call := "(", [ expr, { ",", expr }, [ "," ] ], ")"
         let call = expr
@@ -118,7 +190,7 @@ where
 
         // field_access := ".", segment
         let field_access = just(TokenKind::Dot)
-            .ignore_then(segment(type_parser!()))
+            .ignore_then(segment(ptype.clone()))
             .map(|seg| seg);
 
         enum Accessor {
@@ -149,19 +221,34 @@ where
                     })
             });
 
-        // unary = ( "*" | "&" | "!" | "-" ), factor | factor
+        // cast = factor, [ "as", ptype ];
+        let cast = factor
+            .clone()
+            .then(just(TokenKind::As).ignore_then(ptype.clone()).or_not())
+            .map(|(expr, to_type)| {
+                if let Some(_to_type) = to_type {
+                    Expr::Cast(ExprCast {
+                        expr: Box::new(expr),
+                        to_type: Box::new(_to_type),
+                    })
+                } else {
+                    expr
+                }
+            });
+
+        // unary = ( "*" | "&" | "!" | "-" ), cast | cast
         let unary = select! {
             TokenKind::Asterisk => Operator::Deref,
             TokenKind::And => Operator::Ref,
             TokenKind::Minus => Operator::Neg,
             TokenKind::Not => Operator::Not,
         }
-        .then(factor.clone())
+        .then(cast.clone())
         .map(|(op, expr)| Expr::UnaryOp {
             op,
             expr: Box::new(expr),
         })
-        .or(factor.clone());
+        .or(cast.clone());
 
         // divison := unary, { "/", unary }
         let division = recursive(|division| {
@@ -215,7 +302,91 @@ where
                 })
         });
 
-        if_expr.or(addition)
+        let comp_op = select! {
+            TokenKind::EqualEqual => Operator::Equal,
+            TokenKind::NotEqual => Operator::NotEqual,
+            TokenKind::LessThanEqual => Operator::LessEqual,
+            TokenKind::GreaterThanEqual => Operator::GreaterEqual,
+            TokenKind::LessThan => Operator::Less,
+            TokenKind::GreaterThan => Operator::Greater,
+        };
+
+        // comparation = addition, [ ( "==" \| "!=" | "<=" | ">=" | "<" | ">" ), addition ];
+        let comparation = addition
+            .clone()
+            .then(comp_op.then(addition.clone()).or_not())
+            .map(|(left, right)| {
+                if let Some((op, right)) = right {
+                    Expr::BinaryOp {
+                        left: Box::new(left),
+                        op,
+                        right: Box::new(right),
+                    }
+                } else {
+                    left
+                }
+            });
+
+        // logic_and = comparation, { "&&", comparation };
+        let logic_and = recursive(|logic_and| {
+            let op = select! {
+                TokenKind::AndAnd => Operator::And,
+            };
+
+            comparation
+                .clone()
+                .foldl_with(op.then(logic_and).repeated(), |lhs, (op, rhs), _e| {
+                    Expr::BinaryOp {
+                        left: Box::new(lhs),
+                        op,
+                        right: Box::new(rhs),
+                    }
+                })
+        });
+
+        // logic_or = logic_and, { "||", logic_and };
+        let logic_or = recursive(|logic_or| {
+            let op = select! {
+                TokenKind::OrOr => Operator::Or,
+            };
+
+            logic_and
+                .clone()
+                .foldl_with(op.then(logic_or).repeated(), |lhs, (op, rhs), _e| {
+                    Expr::BinaryOp {
+                        left: Box::new(lhs),
+                        op,
+                        right: Box::new(rhs),
+                    }
+                })
+        });
+
+        // assign_kind = "= | "+=" | "-=" | "*=" | "/="
+        let assign_kind = select! {
+            TokenKind::Equal => AssignKind::Equal,
+            TokenKind::PlusEqual => AssignKind::AddEqual,
+            TokenKind::MinusEqual => AssignKind::SubEqual,
+            TokenKind::AsteriskEqual => AssignKind::MulEqual,
+            TokenKind::SlashEqual => AssignKind::DivEqual,
+        };
+
+        // assign = logic_or, [ assign_kind, expr ];
+        let assign = logic_or
+            .clone()
+            .then(assign_kind.then(expr.clone()).or_not())
+            .map(|(left, right)| {
+                if let Some((kind, rhs)) = right {
+                    Expr::Assign(ExprAssign {
+                        left: Box::new(left),
+                        kind,
+                        right: Box::new(rhs),
+                    })
+                } else {
+                    left
+                }
+            });
+
+        if_expr.or(assign).or(logic_or)
     })
 }
 
@@ -253,11 +424,12 @@ pub(crate) fn test_parse<'a>(source: &'a str) -> crate::errors::Result<'a, Expr>
     Ok(result.output().unwrap().to_owned())
 }
 
+#[allow(unused_imports)]
 mod test {
-    #[allow(unused_imports)]
+    use super::*;
     use crate::parsers::expr::*;
-    #[allow(unused_imports)]
     use crate::parsers::{ident::Ident, path::Segment};
+    use crate::unwrap_or_report;
 
     #[test]
     fn it_works() {
@@ -268,9 +440,80 @@ mod test {
     }
 
     #[test]
-    fn test_access_call() {
-        use super::*;
+    fn test_asign() {
+        let source = "a = 1 + 2";
+        let result = super::test_parse(source);
 
+        let expected = Expr::BinaryOp {
+            left: Box::new(Expr::Path(PathExpr {
+                segments: vec![Segment {
+                    name: Ident::new("a"),
+                    generics: None,
+                }],
+            })),
+            op: Operator::Equal,
+            right: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Value(ExprValue::Integer("1".to_string()))),
+                op: Operator::Add,
+                right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
+            }),
+        };
+
+        assert_eq!(unwrap_or_report!(result, source), expected);
+    }
+
+    #[test]
+    fn test_cast() {
+        let source = "value as i32";
+        let result = super::test_parse(source);
+
+        let expected = Expr::Cast(ExprCast {
+            expr: Box::new(Expr::Path(PathExpr {
+                segments: vec![Segment {
+                    name: Ident::new("value"),
+                    generics: None,
+                }],
+            })),
+            to_type: Box::new(Type::Path(PathExpr {
+                segments: vec![Segment {
+                    name: Ident::new("i32"),
+                    generics: None,
+                }],
+            })),
+        });
+
+        assert_eq!(unwrap_or_report!(result, source), expected);
+    }
+
+    #[test]
+    fn test_struct_init() {
+        let source = "Foo { .a = 42, .b = true }";
+        let result = super::test_parse(source);
+
+        let expected = Expr::Init(ExprInit {
+            path: PathExpr {
+                segments: vec![Segment {
+                    name: Ident::new("Foo"),
+                    generics: None,
+                }],
+            },
+            fields: vec![
+                ExprInitField {
+                    name: Ident::new("a"),
+                    value: Box::new(Expr::Value(ExprValue::Integer("42".to_string()))),
+                },
+                ExprInitField {
+                    name: Ident::new("b"),
+                    value: Box::new(Expr::Value(ExprValue::Bool(true))),
+                },
+            ],
+        });
+
+        assert_eq!(unwrap_or_report!(result, source), expected);
+    }
+
+    #[test]
+    fn test_access_call() {
         let ast = super::test_parse("obj().method(arg1, arg2)").unwrap();
 
         let expected = Expr::Call(ExprCall {

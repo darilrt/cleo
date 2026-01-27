@@ -83,3 +83,40 @@ macro_rules! unwrap_or_report {
         }
     }};
 }
+
+#[macro_export]
+macro_rules! unwrap_or_report_file {
+    ($result:expr, $file:expr, $source:expr) => {{
+        use ariadne::{Color, Label, Report, ReportKind, Source};
+
+        match $result {
+            Ok(r) => r,
+            Err(kind) => {
+                match kind {
+                    $crate::errors::Kind::LexError(e) => {
+                        println!("Lexer Error: {:?}", e);
+                    }
+                    $crate::errors::Kind::ParseError(errs) => {
+                        errs.into_iter().for_each(|e| {
+                            Report::build(ReportKind::Error, ($file, e.span().into_range()))
+                                .with_config(
+                                    ariadne::Config::new()
+                                        .with_index_type(ariadne::IndexType::Byte),
+                                )
+                                .with_message(e.clone())
+                                .with_label(
+                                    Label::new(($file, e.span().into_range()))
+                                        .with_message(e.clone())
+                                        .with_color(Color::Red),
+                                )
+                                .finish()
+                                .print(($file, Source::from(&$source)))
+                                .unwrap()
+                        });
+                    }
+                }
+                panic!("Parsing failed with errors.");
+            }
+        }
+    }};
+}

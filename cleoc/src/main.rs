@@ -1,4 +1,4 @@
-use parser::unwrap_or_report;
+use parser::unwrap_or_report_file;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -12,7 +12,7 @@ fn main() {
 
     let source = std::fs::read_to_string(source_file).expect("Failed to read source file");
 
-    let unit = unwrap_or_report!(parser::parse(&source), &source);
+    let unit = unwrap_or_report_file!(parser::parse(&source), source_file, &source);
 
     println!("{:#?}", unit);
 }

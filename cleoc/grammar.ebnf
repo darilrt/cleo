@@ -1,6 +1,13 @@
 decl
     = fn_decl
-    | type_decl;
+    | type_decl
+    | import_decl;
+
+import_decl
+    = "import", import_path;
+
+import_path
+    = ident, { ".", ident };
 
 type_decl
     = "type", ident, [ generic_params ], "=", type_body;
@@ -27,7 +34,13 @@ struct_field
     = ident, ":", type;
 
 stmt
-    = expr;
+    = local
+    | expr;
+
+local
+    = ( "let"
+    | "var"
+    | "const" ), ident, [ ":", type ], [ "=", expr ];
 
 block
     = "{", [ stmt, { ";", stmt }, [ "," ] ], "}";
@@ -68,7 +81,31 @@ generic_args
 
 expr
     = if_stmt
-    | addition;
+    | assign;
+
+assign
+    = logic_or, [ assign_kind, expr ];
+
+assign_kind
+    = "="
+    | "+="
+    | "-="
+    | "*="
+    | "/=";
+
+logic_or
+    = logic_and, { "||", logic_and };
+
+logic_and
+    = comparation, { "&&", comparation };
+
+comparation
+    = addition, [ ( "=="
+    | "!="
+    | "<="
+    | ">="
+    | "<"
+    | ">" ), addition ];
 
 addition
     = multiplication, { ( "+"
@@ -84,8 +121,11 @@ unary
     = ( "*"
     | "&"
     | "!"
-    | "-" ), factor
-    | factor;
+    | "-" ), cast
+    | cast;
+
+cast
+    = factor, [ "as", type ];
 
 factor
     = primary, { accessor };
@@ -96,7 +136,14 @@ primary
     | string
     | bool
     | ( "(", expr, ")" )
+    | struct_init
     | path;
+
+struct_init
+    = path, "{", [ struct_init_field, { ",", struct_init_field }, [ "," ] ], "}";
+
+struct_init_field
+    = ".", ident, "=", expr;
 
 accessor
     = call

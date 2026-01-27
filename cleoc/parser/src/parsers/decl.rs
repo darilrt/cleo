@@ -1,4 +1,4 @@
-use chumsky::{Parser, extra, input::ValueInput, span::SimpleSpan};
+use chumsky::{Parser, extra, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
 use crate::{
@@ -6,6 +6,7 @@ use crate::{
     errors::ParserError,
     parsers::{
         fn_decl::{FnDecl, fn_decl},
+        import::{ImportDecl, import_decl},
         type_decl::type_decl,
     },
 };
@@ -14,6 +15,7 @@ use crate::{
 pub enum Decl {
     FnDecl(FnDecl),
     TypeDecl(TypeDecl),
+    ImportDecl(ImportDecl),
 }
 
 pub fn decl<'tokens, 'src: 'tokens, I>()
@@ -24,4 +26,6 @@ where
     type_decl()
         .map(Decl::TypeDecl)
         .or(fn_decl().map(Decl::FnDecl))
+        .or(import_decl().map(Decl::ImportDecl))
+        .then_ignore(just(TokenKind::Semicolon).or_not())
 }

@@ -15,6 +15,8 @@ mod expr;
 mod fn_decl;
 mod generic_params;
 mod ident;
+mod import;
+mod local;
 mod path;
 mod ptype;
 mod stmt;
@@ -24,13 +26,18 @@ mod unit;
 pub mod ast {
     pub use super::block::Block;
     pub use super::decl::Decl;
-    pub use super::expr::{Expr, ExprAccess, ExprCall, ExprIf, ExprValue, Operator};
+    pub use super::expr::{
+        Expr, ExprAccess, ExprCall, ExprIf, ExprInit, ExprInitField, ExprValue, Operator,
+    };
     pub use super::fn_decl::{FnDecl, FnParam, FnSignature};
     pub use super::generic_params::{GenericParam, GenericParams};
     pub use super::ident::Ident;
+    pub use super::import::ImportDecl;
+    pub use super::local::{Binding, LocalDecl};
     pub use super::ptype::Type;
     pub use super::stmt::Stmt;
     pub use super::type_decl::{EnumVariant, StructField, TraitMethod, TypeBody, TypeDecl};
+    pub use super::unit::Unit;
 }
 
 pub fn parse<'a>(source: &'a str) -> errors::Result<'a, Unit> {
