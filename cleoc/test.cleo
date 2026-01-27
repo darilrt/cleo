@@ -1,0 +1,16 @@
+
+type Printable = trait {
+    fn print()
+}
+
+type Foo = struct {
+    a: i32
+}
+
+fn print(self: *Foo) {
+    print("Foo::a = {}", self.a)
+}
+
+fn main() {
+    print("Hello, World!")
+}

@@ -6,7 +6,7 @@ use chumsky::{
 
 use crate::{
     errors::{self, Kind},
-    parser::unit::{Unit, unit},
+    parsers::unit::{Unit, unit},
 };
 
 mod block;

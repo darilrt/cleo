@@ -3,7 +3,7 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parser::{
+    parsers::{
         fn_decl::{FnSignature, fn_signature},
         generic_params::{GenericParams, generic_params},
         ident::{Ident, ident},
@@ -140,7 +140,7 @@ mod test {
     #[test]
     fn test_trait() {
         use super::*;
-        use crate::parser::fn_decl::FnSignature;
+        use crate::parsers::fn_decl::FnSignature;
 
         let source = r#"type Drawable = trait { 
     fn draw()
@@ -168,8 +168,8 @@ mod test {
                             name: Ident::new("size"),
                             generics: Some(GenericParams(vec![])),
                             parameters: vec![],
-                            return_type: Some(Type::Path(crate::parser::path::PathExpr {
-                                segments: vec![crate::parser::path::Segment {
+                            return_type: Some(Type::Path(crate::parsers::path::PathExpr {
+                                segments: vec![crate::parsers::path::Segment {
                                     name: Ident::new("i32"),
                                     generics: None,
                                 },],
@@ -184,7 +184,7 @@ mod test {
     #[test]
     fn test_alias() {
         use super::*;
-        use crate::parser::path::{PathExpr, Segment};
+        use crate::parsers::path::{PathExpr, Segment};
 
         let source = r#"type Alias = Point[Int]"#;
 
@@ -213,7 +213,7 @@ mod test {
     #[test]
     fn test_struct() {
         use super::*;
-        use crate::parser::{
+        use crate::parsers::{
             generic_params::GenericParam,
             path::{PathExpr, Segment},
         };

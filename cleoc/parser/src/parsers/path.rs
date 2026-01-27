@@ -3,7 +3,7 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parser::{
+    parsers::{
         ident::{Ident, ident},
         ptype::Type,
     },
@@ -61,7 +61,7 @@ where
 #[macro_export]
 macro_rules! path_parser {
     () => {
-        $crate::parser::ptype::make_parsers().1
+        $crate::parsers::ptype::make_parsers().1
     };
 }
 

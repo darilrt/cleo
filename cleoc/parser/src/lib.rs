@@ -1,5 +1,5 @@
-mod parser;
+mod parsers;
 mod utils;
 
-pub use parser::*;
+pub use parsers::*;
 pub mod errors;

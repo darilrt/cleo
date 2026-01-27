@@ -1,7 +1,6 @@
 use parser::unwrap_or_report;
 
 fn main() {
-    // load a file from first argument, parse it, and print the AST or errors
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() != 2 {

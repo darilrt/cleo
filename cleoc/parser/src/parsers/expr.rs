@@ -9,7 +9,7 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parser::{
+    parsers::{
         block::{Block, block_impl},
         path::{PathExpr, Segment, segment},
     },
@@ -255,9 +255,9 @@ pub(crate) fn test_parse<'a>(source: &'a str) -> crate::errors::Result<'a, Expr>
 
 mod test {
     #[allow(unused_imports)]
-    use crate::parser::expr::*;
+    use crate::parsers::expr::*;
     #[allow(unused_imports)]
-    use crate::parser::{ident::Ident, path::Segment};
+    use crate::parsers::{ident::Ident, path::Segment};
 
     #[test]
     fn it_works() {

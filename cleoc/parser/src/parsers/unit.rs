@@ -1,7 +1,7 @@
 use chumsky::{IterParser, Parser, extra, input::ValueInput, prelude::end, span::SimpleSpan};
 use lexer::TokenKind;
 
-use crate::{ast::Decl, errors::ParserError, parser::decl::decl};
+use crate::{ast::Decl, errors::ParserError, parsers::decl::decl};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Unit {

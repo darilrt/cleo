@@ -11,6 +11,9 @@ type_body
     | enum_decl
     | type;
 
+trait_decl
+    = "trait", "{", [ fn_decl, { ";", fn_decl }, [ ";" ] ], "}";
+
 enum_decl
     = "enum", "{", [ enum_variant, { ",", enum_variant }, [ "," ] ], "}";
 

@@ -9,7 +9,7 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parser::path::{PathExpr, path_impl},
+    parsers::path::{PathExpr, path_impl},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,7 +98,7 @@ where
 #[macro_export]
 macro_rules! type_parser {
     () => {
-        $crate::parser::ptype::make_parsers().0
+        $crate::parsers::ptype::make_parsers().0
     };
 }
 
@@ -145,7 +145,7 @@ mod test {
     #[allow(unused)]
     use super::*;
     #[allow(unused)]
-    use crate::parser::{ident::Ident, path::Segment};
+    use crate::parsers::{ident::Ident, path::Segment};
 
     #[test]
     fn test_type() {

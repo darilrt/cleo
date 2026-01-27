@@ -86,9 +86,6 @@ pub enum TokenKind<'a> {
     /// Keyword `null` for null value.
     #[token("null")]
     Null,
-    /// Keyword `self` to reference the current instance.
-    #[token("self")]
-    SelfIdent,
     /// Keyword `trait` to define a trait interface.
     #[token("trait")]
     Trait,
@@ -107,6 +104,10 @@ pub enum TokenKind<'a> {
     /// Keyword `inline` to suggest inlining functions.
     #[token("inline")]
     Inline,
+
+    /// Soft keyword `self` to reference the current instance.
+    // #[token("self")]
+    // Self,
 
     // Literals
     /// Integer literal with optional suffix (decimal, hex, binary, octal).

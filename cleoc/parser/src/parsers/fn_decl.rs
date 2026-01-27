@@ -3,7 +3,7 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parser::{
+    parsers::{
         block::{Block, block},
         generic_params::{GenericParams, generic_params},
         ident::{Ident, ident},
@@ -94,8 +94,8 @@ mod test {
     #[test]
     fn test_fn_decl_parser() {
         use super::*;
-        use crate::parser::generic_params::GenericParam;
-        use crate::parser::path::{PathExpr, Segment};
+        use crate::parsers::generic_params::GenericParam;
+        use crate::parsers::path::{PathExpr, Segment};
 
         let source = "inline fn foo[T: int, U](x: int, y: U) int { }";
         let result = test_parse(source);

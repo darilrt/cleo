@@ -3,7 +3,7 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parser::{
+    parsers::{
         expr::{Expr, expr},
         stmt::{Stmt, stmt_impl},
     },

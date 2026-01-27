@@ -4,7 +4,7 @@ use lexer::TokenKind;
 use crate::{
     ast::TypeDecl,
     errors::ParserError,
-    parser::{
+    parsers::{
         fn_decl::{FnDecl, fn_decl},
         type_decl::type_decl,
     },

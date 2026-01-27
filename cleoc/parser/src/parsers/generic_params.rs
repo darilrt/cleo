@@ -3,7 +3,7 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parser::{
+    parsers::{
         ident::{Ident, ident},
         ptype::Type,
     },
@@ -47,10 +47,10 @@ mod test {
     #[test]
     fn test_generic_params() {
         use super::test_parse;
-        use crate::parser::generic_params::{GenericParam, GenericParams};
-        use crate::parser::ident::Ident;
-        use crate::parser::path::{PathExpr, Segment};
-        use crate::parser::ptype::Type;
+        use crate::parsers::generic_params::{GenericParam, GenericParams};
+        use crate::parsers::ident::Ident;
+        use crate::parsers::path::{PathExpr, Segment};
+        use crate::parsers::ptype::Type;
 
         let input = "[T, U: *const i32, V]";
         let result = test_parse(input).unwrap();
