@@ -1,8 +1,110 @@
+decl
+    = fn_decl
+    | type_decl;
 
-path ::= segment ("." segment)*
-segment ::= ident [ "[" generic_list "]" ]
-generic_list ::= type ("," type)*
+type_decl
+    = "type", ident, [ generic_params ], "=", type_body;
 
-type ::= array ptr path
-array ::= ("[" usize "]")*
-ptr ::= ("*" | ("*" "const"))*
+type_body
+    = struct_decl
+    | trait_decl
+    | enum_decl
+    | type;
+
+enum_decl
+    = "enum", "{", [ enum_variant, { ",", enum_variant }, [ "," ] ], "}";
+
+enum_variant
+    = ident;
+
+struct_decl
+    = "struct", "{", [ struct_field, { ",", struct_field }, [ "," ] ], "}";
+
+struct_field
+    = ident, ":", type;
+
+stmt
+    = expr;
+
+block
+    = "{", [ stmt, { ";", stmt }, [ "," ] ], "}";
+
+fn_decl
+    = [ "inline" ], "fn", ident, [ generic_params ], fn_params, [ type ], block;
+
+fn_params
+    = "(", [ fn_param, { ",", fn_param }, [ "," ] ], ")";
+
+fn_param
+    = ident, ":", type;
+
+generic_params
+    = "[", [ generic_param, { ",", generic_param }, [ "," ] ], "]";
+
+generic_param
+    = ident, [ ":", type ];
+
+type
+    = array, ptr, path;
+
+array
+    = { "[", usize, "]" };
+
+ptr
+    = { "*"
+    | ( "*", "const" ) };
+
+path
+    = segment, { ".", segment };
+
+segment
+    = ident, generic_args;
+
+generic_args
+    = "[", [ type, { ",", type }, [ "," ] ], "]";
+
+expr
+    = if_stmt
+    | addition;
+
+addition
+    = multiplication, { ( "+"
+    | "-" ), multiplication };
+
+multiplication
+    = division, { "*", division };
+
+division
+    = unary, { "/", unary };
+
+unary
+    = ( "*"
+    | "&"
+    | "!"
+    | "-" ), factor
+    | factor;
+
+factor
+    = primary, { accessor };
+
+primary
+    = integer
+    | float
+    | string
+    | bool
+    | ( "(", expr, ")" )
+    | path;
+
+accessor
+    = call
+    | field_access;
+
+call
+    = "(", [ expr, { ",", expr }, [ "," ] ], ")";
+
+field_access
+    = ".", segment;
+
+if_stmt
+    = "if", expr, block, [ "else", ( if_stmt
+    | block ) ];

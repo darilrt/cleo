@@ -6,16 +6,34 @@ use chumsky::{
 
 use crate::{
     errors::{self, Kind},
-    parser::parser::{Decl, parser},
+    parser::unit::{Unit, unit},
 };
 
+mod block;
+mod decl;
 mod expr;
+mod fn_decl;
+mod generic_params;
 mod ident;
-mod parser;
 mod path;
 mod ptype;
+mod stmt;
+mod type_decl;
+mod unit;
 
-pub fn parse<'a>(source: &'a str) -> errors::Result<'a, Decl> {
+pub mod ast {
+    pub use super::block::Block;
+    pub use super::decl::Decl;
+    pub use super::expr::{Expr, ExprAccess, ExprCall, ExprIf, ExprValue, Operator};
+    pub use super::fn_decl::{FnDecl, FnParam, FnSignature};
+    pub use super::generic_params::{GenericParam, GenericParams};
+    pub use super::ident::Ident;
+    pub use super::ptype::Type;
+    pub use super::stmt::Stmt;
+    pub use super::type_decl::{EnumVariant, StructField, TraitMethod, TypeBody, TypeDecl};
+}
+
+pub fn parse<'a>(source: &'a str) -> errors::Result<'a, Unit> {
     use lexer::lex;
 
     let lexed = lex(source)?;
@@ -30,7 +48,7 @@ pub fn parse<'a>(source: &'a str) -> errors::Result<'a, Decl> {
     let stream = chumsky::input::Stream::from_iter(stream)
         .map((0..source.len()).into(), |(t, s): (_, _)| (t, s));
 
-    let result = parser().parse(stream);
+    let result = unit().parse(stream);
 
     if result.has_errors() {
         let err = result
@@ -41,4 +59,21 @@ pub fn parse<'a>(source: &'a str) -> errors::Result<'a, Decl> {
     }
 
     Ok(result.output().unwrap().to_owned())
+}
+
+mod test {
+    #[test]
+    fn test_parser() {
+        use crate::unwrap_or_report;
+
+        use super::parse;
+
+        let source = r#"fn foo[T]() {
+    a
+    print("Hello, World") 
+}"#;
+        let result = parse(source);
+
+        unwrap_or_report!(result, source);
+    }
 }

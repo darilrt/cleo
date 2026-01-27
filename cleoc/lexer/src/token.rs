@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt::Display};
 
 use logos::Logos;
 
@@ -104,6 +104,9 @@ pub enum TokenKind<'a> {
     /// Keyword `pub` to mark items as public.
     #[token("pub")]
     Pub,
+    /// Keyword `inline` to suggest inlining functions.
+    #[token("inline")]
+    Inline,
 
     // Literals
     /// Integer literal with optional suffix (decimal, hex, binary, octal).
@@ -295,6 +298,19 @@ impl<'a> Token<'a> {
             kind: self.kind.clone(),
             lexeme: self.lexeme.to_string(),
             span: self.span.clone(),
+        }
+    }
+}
+
+impl<'a> Display for TokenKind<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenKind::Ident(name) => write!(f, "Identifier({})", name),
+            TokenKind::Integer(value) => write!(f, "Integer({})", value),
+            TokenKind::Float(value) => write!(f, "Float({})", value),
+            TokenKind::String(value) => write!(f, "String({})", value),
+            TokenKind::Bool(value) => write!(f, "Bool({})", value),
+            t => write!(f, "{:?}", t),
         }
     }
 }

@@ -1,152 +1,387 @@
 use chumsky::{
-    Parser,
+    IterParser, Parser, extra,
+    input::ValueInput,
     prelude::{just, recursive},
     select,
+    span::SimpleSpan,
 };
 use lexer::TokenKind;
 
 use crate::{
-    fn_parser,
+    errors::ParserError,
     parser::{
-        path::{Path, path_impl},
-        ptype::ptype_impl,
+        block::{Block, block_impl},
+        path::{PathExpr, Segment, segment},
     },
-    path_parser,
+    path_parser, type_parser,
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    Value(Value),
+    Value(ExprValue),
     BinaryOp {
         left: Box<Expr>,
         op: Operator,
         right: Box<Expr>,
     },
+    UnaryOp {
+        op: Operator,
+        expr: Box<Expr>,
+    },
+    Call(ExprCall),
+    Access(ExprAccess),
+    Path(PathExpr),
+    If(ExprIf),
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Value {
+pub struct ExprIf {
+    pub condition: Box<Expr>,
+    pub then_branch: Block,
+    pub else_branch: Option<Block>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprValue {
     Integer(String),
     Float(String),
     Bool(bool),
     String(String),
-    Path(Path),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprAccess {
+    pub expr: Box<Expr>,
+    pub segment: Segment,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExprCall {
+    pub expr: Box<Expr>,
+    pub args: Vec<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operator {
-    Add,
-    Sub,
-    Mul,
-    Div,
+    Add, // +
+    Sub, // -
+    Mul, // *
+    Div, // /
+
+    Deref, // *
+    Ref,   // &
+    Neg,   // -
+    Not,   // !
 }
 
-fn_parser!(expr -> Expr {
+// expr = if
+pub fn expr<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, Expr, extra::Err<ParserError<'tokens, 'src>>> + Clone
+where
+    I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
+{
     recursive(|expr| {
-        // factor := integer | float | string | bool | "(" expr ")" | path
-        let factor = select! {
-            TokenKind::Integer(v) => Expr::Value(Value::Integer(v.to_string())),
-            TokenKind::Float(v) => Expr::Value(Value::Float(v.to_string())),
-            TokenKind::String(v) => Expr::Value(Value::String(v.to_string())),
-            TokenKind::Bool(v) => Expr::Value(Value::Bool(v == "true")),
-        }.or(
-            expr.clone().delimited_by(
-                just(TokenKind::LeftParen),
-                just(TokenKind::RightParen)
-            )
-        )
-        .or(
-        //     recursive(|path| {
-        //         let ptype_parser = ptype_impl(path.clone());
-        //         path_impl(ptype_parser)
-            path_parser!().map(|p| {
-                Expr::Value(Value::Path(p))
-            })
-        );
+        let block = block_impl(expr.clone());
 
-        // divison := factor ("/" factor)*
+        // Control Flow
+        let if_expr = just(TokenKind::If)
+            .ignore_then(expr.clone())
+            .then(block.clone())
+            .then(just(TokenKind::Else).ignore_then(block.clone()).or_not())
+            .map(|((condition, then_branch), else_branch)| {
+                Expr::If(ExprIf {
+                    condition: Box::new(condition),
+                    then_branch,
+                    else_branch,
+                })
+            });
+
+        // primary := integer | float | string | bool | "(" expr ")" | path
+        let primary = select! {
+            TokenKind::Integer(v) => Expr::Value(ExprValue::Integer(v.to_string())),
+            TokenKind::Float(v) => Expr::Value(ExprValue::Float(v.to_string())),
+            TokenKind::String(v) => Expr::Value(ExprValue::String(v.to_string())),
+            TokenKind::Bool(v) => Expr::Value(ExprValue::Bool(v == "true")),
+        }
+        .or(expr
+            .clone()
+            .delimited_by(just(TokenKind::LeftParen), just(TokenKind::RightParen)))
+        .or(path_parser!().map(Expr::Path));
+
+        // call := "(", [ expr, { ",", expr }, [ "," ] ], ")"
+        let call = expr
+            .clone()
+            .separated_by(just(TokenKind::Comma))
+            .allow_trailing()
+            .collect::<Vec<Expr>>()
+            .delimited_by(just(TokenKind::LeftParen), just(TokenKind::RightParen));
+
+        // field_access := ".", segment
+        let field_access = just(TokenKind::Dot)
+            .ignore_then(segment(type_parser!()))
+            .map(|seg| seg);
+
+        enum Accessor {
+            Call(Vec<Expr>),
+            FieldAccess(Segment),
+        }
+
+        // accessor := call | field_access
+        let accessor = field_access
+            .map(Accessor::FieldAccess)
+            .or(call.map(Accessor::Call));
+
+        // factor := primary, { accessor }
+        let factor = primary
+            .then(accessor.repeated().collect::<Vec<Accessor>>())
+            .map(|(base, accessors)| {
+                accessors
+                    .into_iter()
+                    .fold(base, |acc, accessor| match accessor {
+                        Accessor::Call(args) => Expr::Call(ExprCall {
+                            expr: Box::new(acc),
+                            args,
+                        }),
+                        Accessor::FieldAccess(seg) => Expr::Access(ExprAccess {
+                            expr: Box::new(acc),
+                            segment: seg,
+                        }),
+                    })
+            });
+
+        // unary = ( "*" | "&" | "!" | "-" ), factor | factor
+        let unary = select! {
+            TokenKind::Asterisk => Operator::Deref,
+            TokenKind::And => Operator::Ref,
+            TokenKind::Minus => Operator::Neg,
+            TokenKind::Not => Operator::Not,
+        }
+        .then(factor.clone())
+        .map(|(op, expr)| Expr::UnaryOp {
+            op,
+            expr: Box::new(expr),
+        })
+        .or(factor.clone());
+
+        // divison := unary, { "/", unary }
         let division = recursive(|division| {
             let op = select! {
                 TokenKind::Slash => Operator::Div,
             };
 
-            factor.clone()
+            unary
+                .clone()
                 .foldl_with(op.then(division).repeated(), |lhs, (op, rhs), _e| {
-                    Expr::BinaryOp { left: Box::new(lhs), op, right: Box::new(rhs) }
+                    Expr::BinaryOp {
+                        left: Box::new(lhs),
+                        op,
+                        right: Box::new(rhs),
+                    }
                 })
         });
 
-        // term := division ("*" division)*
-        let term = recursive(|term| {
+        // multiplication := division, { "*", division }
+        let multiplication = recursive(|multiplication| {
             let op = select! {
                 TokenKind::Asterisk => Operator::Mul,
             };
 
-            division.clone()
-            .foldl_with(op.then(term).repeated(), |lhs, (op, rhs), _e| {
-                Expr::BinaryOp { left: Box::new(lhs), op, right: Box::new(rhs) }
-            })
+            division
+                .clone()
+                .foldl_with(op.then(multiplication).repeated(), |lhs, (op, rhs), _e| {
+                    Expr::BinaryOp {
+                        left: Box::new(lhs),
+                        op,
+                        right: Box::new(rhs),
+                    }
+                })
         });
 
-        // addition := term (("+" | "-") term)*
+        // addition := divison, { ("+" | "-"), divison }
         let addition = recursive(|addition| {
             let op = select! {
                 TokenKind::Plus => Operator::Add,
                 TokenKind::Minus => Operator::Sub,
             };
 
-            term.clone()
-            .foldl_with(op.then(addition).repeated(), |lhs, (op, rhs), _e| {
-                Expr::BinaryOp { left: Box::new(lhs), op, right: Box::new(rhs) }
-            })
+            multiplication
+                .clone()
+                .foldl_with(op.then(addition).repeated(), |lhs, (op, rhs), _e| {
+                    Expr::BinaryOp {
+                        left: Box::new(lhs),
+                        op,
+                        right: Box::new(rhs),
+                    }
+                })
         });
 
-        addition
+        if_expr.or(addition)
     })
-});
+}
+
+#[allow(dead_code)]
+pub(crate) fn test_parse<'a>(source: &'a str) -> crate::errors::Result<'a, Expr> {
+    use chumsky::{
+        Parser,
+        input::Input,
+        span::{SimpleSpan, Span},
+    };
+    use lexer::lex;
+
+    let lexed = lex(source)?;
+
+    let stream = lexed.iter().map(|t| {
+        (
+            t.kind.clone(),
+            SimpleSpan::new((), t.span.start..t.span.end),
+        )
+    });
+
+    let stream = chumsky::input::Stream::from_iter(stream)
+        .map((0..source.len()).into(), |(t, s): (_, _)| (t, s));
+
+    let result = expr().parse(stream);
+
+    if result.has_errors() {
+        let err = result
+            .errors()
+            .map(|e| e.clone().into_owned())
+            .collect::<Vec<_>>();
+        return Err(crate::errors::Kind::ParseError(err));
+    }
+
+    Ok(result.output().unwrap().to_owned())
+}
 
 mod test {
     #[allow(unused_imports)]
     use crate::parser::expr::*;
+    #[allow(unused_imports)]
+    use crate::parser::{ident::Ident, path::Segment};
 
     #[test]
     fn it_works() {
-        let ast = super::test_parse("123 * 2").unwrap();
+        let ast = super::test_parse("(Nehuen).chupar[Pito]()").unwrap();
 
+        println!("From: (Nehuen).chupar[Pito]()");
         println!("AST: {:?}", ast);
     }
 
     #[test]
+    fn test_access_call() {
+        use super::*;
+
+        let ast = super::test_parse("obj().method(arg1, arg2)").unwrap();
+
+        let expected = Expr::Call(ExprCall {
+            expr: Box::new(Expr::Access(ExprAccess {
+                expr: Box::new(Expr::Call(ExprCall {
+                    expr: Box::new(Expr::Path(PathExpr {
+                        segments: vec![Segment {
+                            name: Ident {
+                                name: "obj".to_string(),
+                            },
+                            generics: None,
+                        }],
+                    })),
+                    args: vec![],
+                })),
+                segment: Segment {
+                    name: Ident {
+                        name: "method".to_string(),
+                    },
+                    generics: None,
+                },
+            })),
+            args: vec![
+                Expr::Path(PathExpr {
+                    segments: vec![Segment {
+                        name: Ident {
+                            name: "arg1".to_string(),
+                        },
+                        generics: None,
+                    }],
+                }),
+                Expr::Path(PathExpr {
+                    segments: vec![Segment {
+                        name: Ident {
+                            name: "arg2".to_string(),
+                        },
+                        generics: None,
+                    }],
+                }),
+            ],
+        });
+
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
     fn test_addition() {
-        let inputs = ["1 + 2", "3 - 4 + 5", "6 + 7 - 8 + 9"];
+        let inputs = ["1 + 2", "3 - 4 + 5", "6 + 7 - 8 + 9", "a.b + c.d"];
 
         let expected = [
             Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::Integer("1".to_string()))),
+                left: Box::new(Expr::Value(ExprValue::Integer("1".to_string()))),
                 op: Operator::Add,
-                right: Box::new(Expr::Value(Value::Integer("2".to_string()))),
+                right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
             },
             Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::Integer(3.to_string()))),
+                left: Box::new(Expr::Value(ExprValue::Integer(3.to_string()))),
                 op: Operator::Sub,
                 right: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value(Value::Integer("4".to_string()))),
+                    left: Box::new(Expr::Value(ExprValue::Integer("4".to_string()))),
                     op: Operator::Add,
-                    right: Box::new(Expr::Value(Value::Integer("5".to_string()))),
+                    right: Box::new(Expr::Value(ExprValue::Integer("5".to_string()))),
                 }),
             },
             Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::Integer(6.to_string()))),
+                left: Box::new(Expr::Value(ExprValue::Integer(6.to_string()))),
                 op: Operator::Add,
                 right: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value(Value::Integer("7".to_string()))),
+                    left: Box::new(Expr::Value(ExprValue::Integer("7".to_string()))),
                     op: Operator::Sub,
                     right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Value(Value::Integer("8".to_string()))),
+                        left: Box::new(Expr::Value(ExprValue::Integer("8".to_string()))),
                         op: Operator::Add,
-                        right: Box::new(Expr::Value(Value::Integer("9".to_string()))),
+                        right: Box::new(Expr::Value(ExprValue::Integer("9".to_string()))),
                     }),
                 }),
+            },
+            Expr::BinaryOp {
+                left: Box::new(Expr::Path(PathExpr {
+                    segments: vec![
+                        Segment {
+                            name: Ident {
+                                name: "a".to_string(),
+                            },
+                            generics: None,
+                        },
+                        Segment {
+                            name: Ident {
+                                name: "b".to_string(),
+                            },
+                            generics: None,
+                        },
+                    ],
+                })),
+                op: Operator::Add,
+                right: Box::new(Expr::Path(PathExpr {
+                    segments: vec![
+                        Segment {
+                            name: Ident {
+                                name: "c".to_string(),
+                            },
+                            generics: None,
+                        },
+                        Segment {
+                            name: Ident {
+                                name: "d".to_string(),
+                            },
+                            generics: None,
+                        },
+                    ],
+                })),
             },
         ];
 
@@ -162,27 +397,27 @@ mod test {
 
         let expected = [
             Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::Integer("123i32".to_string()))),
+                left: Box::new(Expr::Value(ExprValue::Integer("123i32".to_string()))),
                 op: Operator::Mul,
-                right: Box::new(Expr::Value(Value::Integer("13".to_string()))),
+                right: Box::new(Expr::Value(ExprValue::Integer("13".to_string()))),
             },
             Expr::BinaryOp {
-                left: Box::new(Expr::Value(Value::Float("45.67".to_string()))),
+                left: Box::new(Expr::Value(ExprValue::Float("45.67".to_string()))),
                 op: Operator::Mul,
                 right: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value(Value::Integer("2".to_string()))),
+                    left: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
                     op: Operator::Mul,
-                    right: Box::new(Expr::Value(Value::String("\"Test\"".to_string()))),
+                    right: Box::new(Expr::Value(ExprValue::String("\"Test\"".to_string()))),
                 }),
             },
             Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value(Value::Integer("523".to_string()))),
+                    left: Box::new(Expr::Value(ExprValue::Integer("523".to_string()))),
                     op: Operator::Div,
-                    right: Box::new(Expr::Value(Value::Float("3.14".to_string()))),
+                    right: Box::new(Expr::Value(ExprValue::Float("3.14".to_string()))),
                 }),
                 op: Operator::Mul,
-                right: Box::new(Expr::Value(Value::Bool(true))),
+                right: Box::new(Expr::Value(ExprValue::Bool(true))),
             },
         ];
 
@@ -197,12 +432,12 @@ mod test {
         let inputs = ["123", "45.67", "\"Hello, World!\"", "true", "false", "(1)"];
 
         let expected = [
-            Expr::Value(Value::Integer("123".to_string())),
-            Expr::Value(Value::Float("45.67".to_string())),
-            Expr::Value(Value::String("\"Hello, World!\"".to_string())),
-            Expr::Value(Value::Bool(true)),
-            Expr::Value(Value::Bool(false)),
-            Expr::Value(Value::Integer("1".to_string())),
+            Expr::Value(ExprValue::Integer("123".to_string())),
+            Expr::Value(ExprValue::Float("45.67".to_string())),
+            Expr::Value(ExprValue::String("\"Hello, World!\"".to_string())),
+            Expr::Value(ExprValue::Bool(true)),
+            Expr::Value(ExprValue::Bool(false)),
+            Expr::Value(ExprValue::Integer("1".to_string())),
         ];
 
         for (i, input) in inputs.iter().enumerate() {

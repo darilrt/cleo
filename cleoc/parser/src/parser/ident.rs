@@ -1,13 +1,25 @@
-use chumsky::select;
+use chumsky::{Parser, extra, input::ValueInput, select, span::SimpleSpan};
 use lexer::TokenKind;
 
-use crate::fn_parser;
+use crate::errors::ParserError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Ident {
     pub name: String,
 }
 
-fn_parser!(ident -> Ident {
+pub fn ident<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, Ident, extra::Err<ParserError<'tokens, 'src>>> + Clone
+where
+    I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
+{
     select! { TokenKind::Ident(name) => Ident { name: name.to_string() } }
-});
+}
+
+impl Ident {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+        }
+    }
+}

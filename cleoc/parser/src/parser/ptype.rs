@@ -9,23 +9,20 @@ use lexer::TokenKind;
 
 use crate::{
     errors::ParserError,
-    parser::{
-        expr::expr,
-        path::{Path, path_impl},
-    },
+    parser::path::{PathExpr, path_impl},
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Ptr(Box<Type>),
     ConstPtr(Box<Type>),
-    Path(Path),
+    Path(PathExpr),
     Array(usize, Box<Type>),
 }
 
 // type := array ptr path
 pub fn ptype_impl<'tokens, 'src: 'tokens, I>(
-    path: impl chumsky::Parser<'tokens, I, Path, extra::Err<ParserError<'tokens, 'src>>> + Clone,
+    path: impl chumsky::Parser<'tokens, I, PathExpr, extra::Err<ParserError<'tokens, 'src>>> + Clone,
 ) -> impl Parser<'tokens, I, Type, extra::Err<ParserError<'tokens, 'src>>> + Clone
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
@@ -79,9 +76,12 @@ where
         })
 }
 
+type BoxedParser<'tokens, 'src, I, T> =
+    Boxed<'tokens, 'tokens, I, T, extra::Err<ParserError<'tokens, 'src>>>;
+
 pub fn make_parsers<'tokens, 'src: 'tokens, I>() -> (
-    Boxed<'tokens, 'tokens, I, Type, extra::Err<ParserError<'tokens, 'src>>>,
-    Boxed<'tokens, 'tokens, I, Path, extra::Err<ParserError<'tokens, 'src>>>,
+    BoxedParser<'tokens, 'src, I, Type>,
+    BoxedParser<'tokens, 'src, I, PathExpr>,
 )
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
@@ -98,7 +98,7 @@ where
 #[macro_export]
 macro_rules! type_parser {
     () => {
-        make_parsers().0
+        $crate::parser::ptype::make_parsers().0
     };
 }
 
@@ -151,15 +151,13 @@ mod test {
     fn test_type() {
         let test = test_parse("[1][5]*const A.B[*u8, i32]").unwrap();
 
-        println!("{:?}", test);
-
         assert_eq!(
             test,
             Type::Array(
                 1,
                 Box::new(Type::Array(
                     5,
-                    Box::new(Type::ConstPtr(Box::new(Type::Path(Path {
+                    Box::new(Type::ConstPtr(Box::new(Type::Path(PathExpr {
                         segments: vec![
                             Segment {
                                 name: Ident {
@@ -172,7 +170,7 @@ mod test {
                                     name: "B".to_string(),
                                 },
                                 generics: Some(vec![
-                                    Type::Ptr(Box::new(Type::Path(Path {
+                                    Type::Ptr(Box::new(Type::Path(PathExpr {
                                         segments: vec![Segment {
                                             name: Ident {
                                                 name: "u8".to_string(),
@@ -180,7 +178,7 @@ mod test {
                                             generics: None,
                                         }]
                                     }))),
-                                    Type::Path(Path {
+                                    Type::Path(PathExpr {
                                         segments: vec![Segment {
                                             name: Ident {
                                                 name: "i32".to_string(),
