@@ -444,20 +444,20 @@ mod test {
         let source = "a = 1 + 2";
         let result = super::test_parse(source);
 
-        let expected = Expr::BinaryOp {
+        let expected = Expr::Assign(ExprAssign {
             left: Box::new(Expr::Path(PathExpr {
                 segments: vec![Segment {
                     name: Ident::new("a"),
                     generics: None,
                 }],
             })),
-            op: Operator::Equal,
+            kind: AssignKind::Equal,
             right: Box::new(Expr::BinaryOp {
                 left: Box::new(Expr::Value(ExprValue::Integer("1".to_string()))),
                 op: Operator::Add,
                 right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
             }),
-        };
+        });
 
         assert_eq!(unwrap_or_report!(result, source), expected);
     }

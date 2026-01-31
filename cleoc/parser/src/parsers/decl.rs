@@ -13,9 +13,10 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Decl {
-    FnDecl(FnDecl),
-    TypeDecl(TypeDecl),
-    ImportDecl(ImportDecl),
+    Fn(FnDecl),
+    Type(TypeDecl),
+    Import(ImportDecl),
+    Pub(Box<Decl>),
 }
 
 pub fn decl<'tokens, 'src: 'tokens, I>()
@@ -23,9 +24,14 @@ pub fn decl<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
-    type_decl()
-        .map(Decl::TypeDecl)
-        .or(fn_decl().map(Decl::FnDecl))
-        .or(import_decl().map(Decl::ImportDecl))
-        .then_ignore(just(TokenKind::Semicolon).or_not())
+    let decls = type_decl()
+        .map(Decl::Type)
+        .or(fn_decl().map(Decl::Fn))
+        .or(import_decl().map(Decl::Import))
+        .then_ignore(just(TokenKind::Semicolon).or_not());
+
+    just(TokenKind::Pub)
+        .ignore_then(decls.clone())
+        .map(|d| Decl::Pub(Box::new(d)))
+        .or(decls)
 }

@@ -158,7 +158,7 @@ mod test {
                     TraitMethod {
                         signature: FnSignature {
                             name: Ident::new("draw"),
-                            generics: Some(GenericParams(vec![])),
+                            generics: None,
                             parameters: vec![],
                             return_type: None,
                         },
@@ -166,7 +166,7 @@ mod test {
                     TraitMethod {
                         signature: FnSignature {
                             name: Ident::new("size"),
-                            generics: Some(GenericParams(vec![])),
+                            generics: None,
                             parameters: vec![],
                             return_type: Some(Type::Path(crate::parsers::path::PathExpr {
                                 segments: vec![crate::parsers::path::Segment {

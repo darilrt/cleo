@@ -18,6 +18,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "analyzer"
+version = "0.1.0"
+
+[[package]]
 name = "ar_archive_writer"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -34,13 +38,6 @@ checksum = "8454c8a44ce2cb9cc7e7fae67fc6128465b343b92c6631e94beca3c8d1524ea5"
 dependencies = [
  "unicode-width",
  "yansi",
-]
-
-[[package]]
-name = "ast"
-version = "0.1.0"
-dependencies = [
- "lexer",
 ]
 
 [[package]]
@@ -84,7 +81,6 @@ name = "cleoc"
 version = "0.1.0"
 dependencies = [
  "ariadne",
- "ast",
  "parser",
 ]
 

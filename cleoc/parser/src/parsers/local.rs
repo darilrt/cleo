@@ -9,7 +9,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct LocalDecl {
+pub struct Local {
     pub binding: Binding,
     pub name: Ident,
     pub var_type: Option<Type>,
@@ -18,20 +18,18 @@ pub struct LocalDecl {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Binding {
-    Let,
     Var,
     Const,
 }
 
-// local = ( "let" | "var" | "const" ), ident, [ ":", type ], [ "=", expr ];
+// local = ( "var" | "const" ), ident, [ ":", type ], [ "=", expr ];
 pub fn local_impl<'tokens, 'src: 'tokens, I>(
     expr: impl Parser<'tokens, I, Expr, extra::Err<ParserError<'tokens, 'src>>> + Clone,
-) -> impl Parser<'tokens, I, LocalDecl, extra::Err<ParserError<'tokens, 'src>>> + Clone
+) -> impl Parser<'tokens, I, Local, extra::Err<ParserError<'tokens, 'src>>> + Clone
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
     let binding = chumsky::select! {
-        TokenKind::Let => Binding::Let,
         TokenKind::Var => Binding::Var,
         TokenKind::Const => Binding::Const,
     };
@@ -44,7 +42,7 @@ where
         .map(|e| e.map(Box::new));
 
     binding.then(ident()).then(local_type).then(local_init).map(
-        |(((binding, name), var_type), initializer)| LocalDecl {
+        |(((binding, name), var_type), initializer)| Local {
             binding,
             name,
             var_type,
@@ -54,14 +52,14 @@ where
 }
 
 pub fn local<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, LocalDecl, extra::Err<ParserError<'tokens, 'src>>> + Clone
+-> impl Parser<'tokens, I, Local, extra::Err<ParserError<'tokens, 'src>>> + Clone
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
     local_impl(expr())
 }
 
-test_parser!(local() => LocalDecl);
+test_parser!(local() => Local);
 
 mod test {
 
@@ -74,14 +72,14 @@ mod test {
             parsers::path::{PathExpr, Segment},
         };
 
-        let source = "let x: i32 = 42";
+        let source = "var x: i32 = 42";
 
         let result = test_parse(source);
 
         assert_eq!(
             unwrap_or_report!(result, source),
-            LocalDecl {
-                binding: Binding::Let,
+            Local {
+                binding: Binding::Var,
                 name: Ident::new("x"),
                 var_type: Some(Type::Path(PathExpr {
                     segments: vec![Segment {

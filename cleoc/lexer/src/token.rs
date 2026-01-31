@@ -47,9 +47,6 @@ pub enum TokenKind<'a> {
     /// Keyword `fn` to declare a function.
     #[token("fn")]
     Fn,
-    /// Keyword `let` to declare an immutable binding.
-    #[token("let")]
-    Let,
     /// Keyword `var` to declare a mutable variable.
     #[token("var")]
     Var,
@@ -65,6 +62,9 @@ pub enum TokenKind<'a> {
     /// Keyword `for` for iteration.
     #[token("for")]
     For,
+    /// Keyword `loop` for infinite loops.
+    #[token("loop")]
+    Loop,
     /// Keyword `return` to exit a function.
     #[token("return")]
     Return,
@@ -240,9 +240,6 @@ pub enum TokenKind<'a> {
     /// Colon `:` for type annotations.
     #[token(":")]
     Colon,
-    /// Double colon `::` for namespace resolution.
-    #[token("::")]
-    DoubleColon,
     /// Dot `.` for member access.
     #[token(".")]
     Dot,
@@ -254,16 +251,16 @@ pub enum TokenKind<'a> {
     FatArrow,
 
     // Symbols
-    /// Hash symbol `#` for attributes or directives.
+    /// Hash symbol `#`.
     #[token("#")]
     Hash,
-    /// At symbol `@` for annotations.
+    /// At symbol `@`.
     #[token("@")]
     At,
-    /// Dollar symbol `$` for special syntax.
+    /// Dollar symbol `$`.
     #[token("$")]
     Dollar,
-    /// Question mark `?` for optional types.
+    /// Question mark `?`.
     #[token("?")]
     Question,
     /// Ellipsis `...` for variadic arguments or ranges.

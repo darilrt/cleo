@@ -1,4 +1,11 @@
 decl
+    = pub;
+
+pub
+    = "pub", decl
+    | decls;
+
+decls
     = fn_decl
     | type_decl
     | import_decl;
@@ -35,11 +42,20 @@ struct_field
 
 stmt
     = local
+    | defer
+    | return_stmt
+    | "break"
+    | "continue"
     | expr;
 
+return_stmt
+    = "return", [ expr ];
+
+defer
+    = "defer", expr;
+
 local
-    = ( "let"
-    | "var"
+    = ( "var"
     | "const" ), ident, [ ":", type ], [ "=", expr ];
 
 block

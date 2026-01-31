@@ -1,6 +1,6 @@
 import std.io.print
 
-type Printable = trait {
+pub type Printable = trait {
     fn print()
 }
 
@@ -13,7 +13,7 @@ fn print(self: *Foo) {
 }
 
 fn main() {
-    let foo = Foo { .a = 42 }
+    var foo = Foo { .a = 42 }
     var b: u32 = 10
     const c = 42
 
@@ -25,3 +25,4 @@ fn main() {
         print("foo.a is not greater than b")
     }
 }
+

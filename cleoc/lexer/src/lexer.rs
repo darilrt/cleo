@@ -63,7 +63,6 @@ pub fn lex<'a>(src: &'a str) -> Result<Vec<Token<'a>>, LexerError> {
                         | TokenKind::Slash
                         | TokenKind::Percent
                         | TokenKind::Dot
-                        | TokenKind::DoubleColon
                         | TokenKind::RightParen
                         | TokenKind::RightBrace
                         | TokenKind::RightBracket

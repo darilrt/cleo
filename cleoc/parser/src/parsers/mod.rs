@@ -33,7 +33,7 @@ pub mod ast {
     pub use super::generic_params::{GenericParam, GenericParams};
     pub use super::ident::Ident;
     pub use super::import::ImportDecl;
-    pub use super::local::{Binding, LocalDecl};
+    pub use super::local::{Binding, Local};
     pub use super::ptype::Type;
     pub use super::stmt::Stmt;
     pub use super::type_decl::{EnumVariant, StructField, TraitMethod, TypeBody, TypeDecl};
