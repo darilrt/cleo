@@ -4,38 +4,38 @@ pub struct SymbolTable {
     scopes: Vec<Scope>,
 }
 
-struct Scope {
-    symbols: 
-    types: HashMap<String, Symbol>,
-}
+struct Scope(HashMap<String, Symbol>);
 
 struct Symbol {
     name: String,
-    symbol_type: SymbolType,
+    symbol_type: SymbolKind,
 }
 
-enum SymbolType {
+enum SymbolKind {
     Variable,
     Function,
 }
 
 impl SymbolTable {
     pub fn new() -> Self {
-        SymbolTable {
-            scopes: vec![Scope {
-                symbols: HashMap::new(),
-            }],
-        }
+        SymbolTable { scopes: Vec::new() }
     }
 
     pub fn push_scope(&mut self) {
-        self.scopes.push(Scope {
-            symbols: HashMap::new(),
-        });
+        self.scopes.push(Scope(HashMap::new()));
     }
 
     pub fn pop_scope(&mut self) {
         self.scopes.pop();
+    }
+}
+
+impl Symbol {
+    pub fn function(name: String) -> Self {
+        Symbol {
+            name,
+            symbol_type: SymbolKind::Function,
+        }
     }
 }
 
