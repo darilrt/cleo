@@ -108,9 +108,9 @@ pub enum TokenKind<'a> {
     #[token("inline")]
     Inline,
 
-    /// Soft keyword `self` to reference the current instance.
-    // #[token("self")]
-    // Self,
+    /// Keyword `self` — the current instance. Only valid as the first parameter of a function.
+    #[token("self")]
+    SelfKw,
 
     // Literals
     /// Integer literal with optional suffix (decimal, hex, binary, octal).

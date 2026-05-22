@@ -41,17 +41,45 @@ where
 {
     let ptype = type_parser!();
 
-    // param := ident ':' type
-    let param = ident()
+    // self_param := 'self' ':' type
+    // Only valid as the first parameter. SelfKw will not match ident(), so
+    // writing `self` in any other position is a parse error.
+    let self_param = just(TokenKind::SelfKw)
+        .ignore_then(just(TokenKind::Colon))
+        .ignore_then(ptype.clone())
+        .map(|ty| FnParam { name: Ident::new("self"), ty });
+
+    // regular_param := ident ':' type
+    let regular_param = ident()
         .then_ignore(just(TokenKind::Colon))
         .then(ptype.clone())
         .map(|(name, ty)| FnParam { name, ty });
 
-    // param_list := param (',' param)* (',')?
-    let parameter_list = param
-        .separated_by(just(TokenKind::Comma))
-        .allow_trailing()
-        .collect::<Vec<FnParam>>()
+    // parameter_list :=
+    //   '(' ')'
+    //   '(' self_param (',' regular_param)* ','? ')'
+    //   '(' regular_param (',' regular_param)* ','? ')'
+    let parameter_list = self_param
+        .then(
+            just(TokenKind::Comma)
+                .ignore_then(
+                    regular_param
+                        .clone()
+                        .separated_by(just(TokenKind::Comma))
+                        .allow_trailing()
+                        .collect::<Vec<FnParam>>(),
+                )
+                .or_not()
+                .map(|v| v.unwrap_or_default()),
+        )
+        .map(|(self_p, mut rest)| {
+            rest.insert(0, self_p);
+            rest
+        })
+        .or(regular_param
+            .separated_by(just(TokenKind::Comma))
+            .allow_trailing()
+            .collect::<Vec<FnParam>>())
         .delimited_by(just(TokenKind::LeftParen), just(TokenKind::RightParen));
 
     ident()

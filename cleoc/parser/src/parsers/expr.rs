@@ -250,57 +250,44 @@ where
         })
         .or(cast.clone());
 
-        // divison := unary, { "/", unary }
-        let division = recursive(|division| {
-            let op = select! {
-                TokenKind::Slash => Operator::Div,
-            };
-
-            unary
-                .clone()
-                .foldl_with(op.then(division).repeated(), |lhs, (op, rhs), _e| {
-                    Expr::BinaryOp {
-                        left: Box::new(lhs),
-                        op,
-                        right: Box::new(rhs),
-                    }
-                })
-        });
+        // division := unary, { "/", unary }
+        let division = unary.clone().foldl_with(
+            select! { TokenKind::Slash => Operator::Div }
+                .then(unary.clone())
+                .repeated(),
+            |lhs, (op, rhs), _e| Expr::BinaryOp {
+                left: Box::new(lhs),
+                op,
+                right: Box::new(rhs),
+            },
+        );
 
         // multiplication := division, { "*", division }
-        let multiplication = recursive(|multiplication| {
-            let op = select! {
-                TokenKind::Asterisk => Operator::Mul,
-            };
+        let multiplication = division.clone().foldl_with(
+            select! { TokenKind::Asterisk => Operator::Mul }
+                .then(division.clone())
+                .repeated(),
+            |lhs, (op, rhs), _e| Expr::BinaryOp {
+                left: Box::new(lhs),
+                op,
+                right: Box::new(rhs),
+            },
+        );
 
-            division
-                .clone()
-                .foldl_with(op.then(multiplication).repeated(), |lhs, (op, rhs), _e| {
-                    Expr::BinaryOp {
-                        left: Box::new(lhs),
-                        op,
-                        right: Box::new(rhs),
-                    }
-                })
-        });
-
-        // addition := divison, { ("+" | "-"), divison }
-        let addition = recursive(|addition| {
-            let op = select! {
+        // addition := multiplication, { ("+" | "-"), multiplication }
+        let addition = multiplication.clone().foldl_with(
+            select! {
                 TokenKind::Plus => Operator::Add,
                 TokenKind::Minus => Operator::Sub,
-            };
-
-            multiplication
-                .clone()
-                .foldl_with(op.then(addition).repeated(), |lhs, (op, rhs), _e| {
-                    Expr::BinaryOp {
-                        left: Box::new(lhs),
-                        op,
-                        right: Box::new(rhs),
-                    }
-                })
-        });
+            }
+            .then(multiplication.clone())
+            .repeated(),
+            |lhs, (op, rhs), _e| Expr::BinaryOp {
+                left: Box::new(lhs),
+                op,
+                right: Box::new(rhs),
+            },
+        );
 
         let comp_op = select! {
             TokenKind::EqualEqual => Operator::Equal,
@@ -327,39 +314,29 @@ where
                 }
             });
 
-        // logic_and = comparation, { "&&", comparation };
-        let logic_and = recursive(|logic_and| {
-            let op = select! {
-                TokenKind::AndAnd => Operator::And,
-            };
+        // logic_and = comparation, { "&&", comparation }
+        let logic_and = comparation.clone().foldl_with(
+            select! { TokenKind::AndAnd => Operator::And }
+                .then(comparation.clone())
+                .repeated(),
+            |lhs, (op, rhs), _e| Expr::BinaryOp {
+                left: Box::new(lhs),
+                op,
+                right: Box::new(rhs),
+            },
+        );
 
-            comparation
-                .clone()
-                .foldl_with(op.then(logic_and).repeated(), |lhs, (op, rhs), _e| {
-                    Expr::BinaryOp {
-                        left: Box::new(lhs),
-                        op,
-                        right: Box::new(rhs),
-                    }
-                })
-        });
-
-        // logic_or = logic_and, { "||", logic_and };
-        let logic_or = recursive(|logic_or| {
-            let op = select! {
-                TokenKind::OrOr => Operator::Or,
-            };
-
-            logic_and
-                .clone()
-                .foldl_with(op.then(logic_or).repeated(), |lhs, (op, rhs), _e| {
-                    Expr::BinaryOp {
-                        left: Box::new(lhs),
-                        op,
-                        right: Box::new(rhs),
-                    }
-                })
-        });
+        // logic_or = logic_and, { "||", logic_and }
+        let logic_or = logic_and.clone().foldl_with(
+            select! { TokenKind::OrOr => Operator::Or }
+                .then(logic_and.clone())
+                .repeated(),
+            |lhs, (op, rhs), _e| Expr::BinaryOp {
+                left: Box::new(lhs),
+                op,
+                right: Box::new(rhs),
+            },
+        );
 
         // assign_kind = "= | "+=" | "-=" | "*=" | "/="
         let assign_kind = select! {
@@ -569,27 +546,29 @@ mod test {
                 op: Operator::Add,
                 right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
             },
+            // (3 - 4) + 5
             Expr::BinaryOp {
-                left: Box::new(Expr::Value(ExprValue::Integer(3.to_string()))),
-                op: Operator::Sub,
-                right: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value(ExprValue::Integer("4".to_string()))),
-                    op: Operator::Add,
-                    right: Box::new(Expr::Value(ExprValue::Integer("5".to_string()))),
-                }),
-            },
-            Expr::BinaryOp {
-                left: Box::new(Expr::Value(ExprValue::Integer(6.to_string()))),
-                op: Operator::Add,
-                right: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value(ExprValue::Integer("7".to_string()))),
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(ExprValue::Integer("3".to_string()))),
                     op: Operator::Sub,
-                    right: Box::new(Expr::BinaryOp {
-                        left: Box::new(Expr::Value(ExprValue::Integer("8".to_string()))),
-                        op: Operator::Add,
-                        right: Box::new(Expr::Value(ExprValue::Integer("9".to_string()))),
-                    }),
+                    right: Box::new(Expr::Value(ExprValue::Integer("4".to_string()))),
                 }),
+                op: Operator::Add,
+                right: Box::new(Expr::Value(ExprValue::Integer("5".to_string()))),
+            },
+            // ((6 + 7) - 8) + 9
+            Expr::BinaryOp {
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::BinaryOp {
+                        left: Box::new(Expr::Value(ExprValue::Integer("6".to_string()))),
+                        op: Operator::Add,
+                        right: Box::new(Expr::Value(ExprValue::Integer("7".to_string()))),
+                    }),
+                    op: Operator::Sub,
+                    right: Box::new(Expr::Value(ExprValue::Integer("8".to_string()))),
+                }),
+                op: Operator::Add,
+                right: Box::new(Expr::Value(ExprValue::Integer("9".to_string()))),
             },
             Expr::BinaryOp {
                 left: Box::new(Expr::Path(PathExpr {
@@ -644,14 +623,15 @@ mod test {
                 op: Operator::Mul,
                 right: Box::new(Expr::Value(ExprValue::Integer("13".to_string()))),
             },
+            // (45.67 * 2) * "Test"
             Expr::BinaryOp {
-                left: Box::new(Expr::Value(ExprValue::Float("45.67".to_string()))),
-                op: Operator::Mul,
-                right: Box::new(Expr::BinaryOp {
-                    left: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
+                left: Box::new(Expr::BinaryOp {
+                    left: Box::new(Expr::Value(ExprValue::Float("45.67".to_string()))),
                     op: Operator::Mul,
-                    right: Box::new(Expr::Value(ExprValue::String("\"Test\"".to_string()))),
+                    right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
                 }),
+                op: Operator::Mul,
+                right: Box::new(Expr::Value(ExprValue::String("\"Test\"".to_string()))),
             },
             Expr::BinaryOp {
                 left: Box::new(Expr::BinaryOp {
@@ -687,5 +667,58 @@ mod test {
             let ast = super::test_parse(input).unwrap();
             assert_eq!(ast, expected[i]);
         }
+    }
+
+    // These tests assert left-associative behavior and currently FAIL because
+    // the parser is right-recursive. They exist to demonstrate the bug.
+    #[test]
+    fn test_sub_left_associative() {
+        // 10 - 3 - 2  should be  (10 - 3) - 2  = 5
+        // parser currently produces  10 - (3 - 2)  = 9
+        let ast = super::test_parse("10 - 3 - 2").unwrap();
+        let expected = Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Value(ExprValue::Integer("10".to_string()))),
+                op: Operator::Sub,
+                right: Box::new(Expr::Value(ExprValue::Integer("3".to_string()))),
+            }),
+            op: Operator::Sub,
+            right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
+        };
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn test_div_left_associative() {
+        // 12 / 3 / 2  should be  (12 / 3) / 2  = 2
+        // parser currently produces  12 / (3 / 2)  = 6
+        let ast = super::test_parse("12 / 3 / 2").unwrap();
+        let expected = Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Value(ExprValue::Integer("12".to_string()))),
+                op: Operator::Div,
+                right: Box::new(Expr::Value(ExprValue::Integer("3".to_string()))),
+            }),
+            op: Operator::Div,
+            right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
+        };
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn test_mixed_add_sub_left_associative() {
+        // 6 - 2 + 1  should be  (6 - 2) + 1  = 5
+        // parser currently produces  6 - (2 + 1)  = 3
+        let ast = super::test_parse("6 - 2 + 1").unwrap();
+        let expected = Expr::BinaryOp {
+            left: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Value(ExprValue::Integer("6".to_string()))),
+                op: Operator::Sub,
+                right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
+            }),
+            op: Operator::Add,
+            right: Box::new(Expr::Value(ExprValue::Integer("1".to_string()))),
+        };
+        assert_eq!(ast, expected);
     }
 }

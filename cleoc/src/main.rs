@@ -14,5 +14,7 @@ fn main() {
 
     let unit = unwrap_or_report_file!(parser::parse(&source), source_file, &source);
 
+    // let table = collector::collect(&unit);
+
     println!("{:#?}", unit);
 }

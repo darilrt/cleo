@@ -26,7 +26,10 @@ type_body
     | type;
 
 trait_decl
-    = "trait", "{", [ fn_decl, { ";", fn_decl }, [ ";" ] ], "}";
+    = "trait", "{", [ trait_method, { ";", trait_method }, [ ";" ] ], "}";
+
+trait_method
+    = "fn", fn_signature;
 
 enum_decl
     = "enum", "{", [ enum_variant, { ",", enum_variant }, [ "," ] ], "}";
@@ -59,13 +62,20 @@ local
     | "const" ), ident, [ ":", type ], [ "=", expr ];
 
 block
-    = "{", [ stmt, { ";", stmt }, [ "," ] ], "}";
+    = "{", { ";" }, [ stmt, { ";", stmt }, [ ";" ] ], "}";
 
 fn_decl
-    = [ "inline" ], "fn", ident, [ generic_params ], fn_params, [ type ], block;
+    = [ "inline" ], "fn", fn_signature, block;
+
+fn_signature
+    = ident, [ generic_params ], fn_params, [ type ];
 
 fn_params
-    = "(", [ fn_param, { ",", fn_param }, [ "," ] ], ")";
+    = "(", [ self_param, [ ",", fn_param, { ",", fn_param }, [ "," ] ]
+    | fn_param, { ",", fn_param }, [ "," ] ], ")";
+
+self_param
+    = "self", ":", type;
 
 fn_param
     = ident, ":", type;
@@ -90,10 +100,10 @@ path
     = segment, { ".", segment };
 
 segment
-    = ident, generic_args;
+    = ident, [ generic_args ];
 
 generic_args
-    = "[", [ type, { ",", type }, [ "," ] ], "]";
+    = "[", type, { ",", type }, [ "," ], "]";
 
 expr
     = if_stmt
@@ -172,5 +182,4 @@ field_access
     = ".", segment;
 
 if_stmt
-    = "if", expr, block, [ "else", ( if_stmt
-    | block ) ];
+    = "if", expr, block, [ "else", block ];
