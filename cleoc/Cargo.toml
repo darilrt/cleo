@@ -4,8 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["analyzer","lexer", "parser"]
+members = [
+    "crates/errors",
+    "crates/lexer",
+    "crates/parser",
+    "crates/resolver",
+    "crates/types",
+]
 
 [dependencies]
-parser = { path = "./parser" }
+parser = { path = "./crates/parser" }
+resolver = { path = "./crates/resolver" }
+types = { path = "./crates/types" }
 ariadne = "0.6.0"

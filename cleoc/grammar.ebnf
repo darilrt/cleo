@@ -47,9 +47,12 @@ stmt
     = local
     | defer
     | return_stmt
-    | "break"
+    | break_stmt
     | "continue"
     | expr;
+
+break_stmt
+    = "break", [ expr ];
 
 return_stmt
     = "return", [ expr ];
@@ -65,7 +68,7 @@ block
     = "{", { ";" }, [ stmt, { ";", stmt }, [ ";" ] ], "}";
 
 fn_decl
-    = [ "inline" ], "fn", fn_signature, block;
+    = "fn", fn_signature, block;
 
 fn_signature
     = ident, [ generic_params ], fn_params, [ type ];
@@ -134,14 +137,12 @@ comparation
     | ">" ), addition ];
 
 addition
-    = multiplication, { ( "+"
-    | "-" ), multiplication };
+    = term, { ( "+"
+    | "-" ), term };
 
-multiplication
-    = division, { "*", division };
-
-division
-    = unary, { "/", unary };
+term
+    = unary, { ( "*"
+    | "/" ), unary };
 
 unary
     = ( "*"
@@ -162,8 +163,13 @@ primary
     | string
     | bool
     | ( "(", expr, ")" )
+    | block
+    | loop_expr
     | struct_init
     | path;
+
+loop_expr
+    = "loop", block;
 
 struct_init
     = path, "{", [ struct_init_field, { ",", struct_init_field }, [ "," ] ], "}";

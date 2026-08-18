@@ -1,28 +1,7 @@
-import std.io.print
-
-pub type Printable = trait {
-    fn print()
+type A = struct {
+    b: i32
 }
 
-type Foo = struct {
-    a: i32,
+fn main(arg_a: u8) {
+    var b: i32 = 10 + arg_a
 }
-
-fn print(self: *Foo) {
-    print("Foo::a = {}", self.a)
-}
-
-fn main() {
-    var foo = Foo { .a = 42 }
-    var b: u32 = 10
-    const c = 42
-
-    b = c + 8
-
-    if foo.a > b as u32 {
-        print("foo.a is greater than b")
-    } else {
-        print("foo.a is not greater than b")
-    }
-}
-
