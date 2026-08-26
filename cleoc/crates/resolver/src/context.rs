@@ -1,15 +1,18 @@
-use errors::Error;
 use parser::ast::Type;
 use types::{
     ScopeID, TypeID, TypeInterner,
     defs::{Signedness, TypeDef},
 };
 
-use crate::symbols::{DefKind, Definition, SymbolTable};
+use crate::{
+    methos::MethodTable,
+    symbols::{DefKind, Definition, SymbolTable},
+};
 
 pub struct Context {
     pub interner: TypeInterner,
     pub table: SymbolTable,
+    pub methods: MethodTable,
     pub primitives: Primitives,
 }
 
@@ -18,29 +21,38 @@ impl Context {
         Context {
             interner: TypeInterner::new(),
             table: SymbolTable::new(),
+            methods: MethodTable::new(),
             primitives,
+        }
+    }
+
+    pub fn is_comparable(&self, typeid: TypeID) -> bool {
+        self.primitives.is_comparable(typeid)
+            || matches!(self.interner.get(typeid), Some(TypeDef::Pointer { .. }))
+    }
+
+    pub fn is_coercible(&self, from: TypeID, to: TypeID) -> bool {
+        if from == to {
+            return true;
+        }
+
+        match (self.interner.get(from), self.interner.get(to)) {
+            (
+                Some(TypeDef::Pointer {
+                    pointee: a,
+                    mutability: true,
+                }),
+                Some(TypeDef::Pointer {
+                    pointee: b,
+                    mutability: false,
+                }),
+            ) => a == b,
+            _ => false,
         }
     }
 
     pub fn set_primitives(&mut self, primitives: Primitives) {
         self.primitives = primitives;
-    }
-
-    pub fn is_integer(&self, typeid: &TypeID) -> bool {
-        typeid == &self.primitives.i8_
-            || typeid == &self.primitives.i16_
-            || typeid == &self.primitives.i32_
-            || typeid == &self.primitives.i64_
-            || typeid == &self.primitives.u8_
-            || typeid == &self.primitives.u16_
-            || typeid == &self.primitives.u32_
-            || typeid == &self.primitives.u64_
-    }
-
-    pub fn is_numeric(&self, typeid: &TypeID) -> bool {
-        typeid == &self.primitives.f32_
-            || typeid == &self.primitives.f64_
-            || self.is_integer(typeid)
     }
 
     pub fn type_to_id(&mut self, scope: ScopeID, ast: &Type) -> Result<TypeID, String> {
@@ -232,6 +244,40 @@ pub struct Primitives {
     pub f64_: TypeID,
 }
 
+impl Primitives {
+    pub fn is_integer(&self, typeid: TypeID) -> bool {
+        typeid == self.i8_
+            || typeid == self.i16_
+            || typeid == self.i32_
+            || typeid == self.i64_
+            || typeid == self.u8_
+            || typeid == self.u16_
+            || typeid == self.u32_
+            || typeid == self.u64_
+    }
+
+    pub fn is_negatable(&self, typeid: TypeID) -> bool {
+        typeid == self.i8_
+            || typeid == self.i16_
+            || typeid == self.i32_
+            || typeid == self.i64_
+            || typeid == self.f32_
+            || typeid == self.f64_
+    }
+
+    pub fn is_bool(&self, typeid: TypeID) -> bool {
+        typeid == self.bool_
+    }
+
+    pub fn is_numeric(&self, typeid: TypeID) -> bool {
+        typeid == self.f32_ || typeid == self.f64_ || self.is_integer(typeid)
+    }
+
+    pub fn is_comparable(&self, ty: TypeID) -> bool {
+        self.is_numeric(ty) || ty == self.bool_
+    }
+}
+
 #[cfg(test)]
 mod test {
     use types::{
@@ -284,7 +330,7 @@ mod test {
         }));
 
         assert_eq!(
-            ctx.type_name(fnty).unwrap(),
+            ctx.type_name(fnty),
             "fn(bool, void, u32, f32, *const [10]Foo) i32"
         );
     }

@@ -41,9 +41,6 @@ pub enum TokenKind<'a> {
     Ident(&'a str),
 
     // Keywords
-    /// Keyword `as` for type casting.
-    #[token("as")]
-    As,
     /// Keyword `fn` to declare a function.
     #[token("fn")]
     Fn,

@@ -8,7 +8,7 @@ use chumsky::{
 use lexer::TokenKind;
 
 use crate::{
-    ast::{Ident, Type},
+    ast::Ident,
     errors::BoxedParser,
     parsers::{
         block::{Block, block_impl},
@@ -33,10 +33,10 @@ pub enum Expr {
     Call(ExprCall),
     Access(ExprAccess),
     Path(PathExpr),
-    If(ExprIf),
     Init(ExprInit),
-    Cast(ExprCast),
     Assign(ExprAssign),
+    If(ExprIf),
+    Loop(Block),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,12 +53,6 @@ pub enum AssignKind {
     SubEqual, // -=
     MulEqual, // *=
     DivEqual, // /=
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprCast {
-    pub expr: Box<Expr>,
-    pub to_type: Box<Type>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -123,6 +117,29 @@ pub enum Operator {
     Or,  // ||
 }
 
+impl Operator {
+    pub fn name(&self) -> &str {
+        match self {
+            Operator::Add => "add",
+            Operator::Div => "divide",
+            Operator::Sub => "subtract",
+            Operator::Mul => "divde",
+            Operator::And
+            | Operator::Greater
+            | Operator::Equal
+            | Operator::Less
+            | Operator::GreaterEqual
+            | Operator::LessEqual
+            | Operator::NotEqual
+            | Operator::Or => "compare",
+            Operator::Deref => "dereference",
+            Operator::Neg => "negate",
+            Operator::Not => "invert",
+            Operator::Ref => "get reference",
+        }
+    }
+}
+
 // expr = if_expr | assign;
 pub fn expr<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, Expr>
 where
@@ -133,8 +150,7 @@ where
         let path = path_parser!();
         let ptype = type_parser!();
 
-        let struct_init_fields = just(TokenKind::Dot)
-            .ignore_then(ident())
+        let struct_init_fields = ident()
             .then_ignore(just(TokenKind::Equal))
             .then(expr.clone())
             .map(|(seg, value)| ExprInitField {
@@ -165,6 +181,8 @@ where
                     else_branch,
                 })
             });
+
+        let loop_expr = just(TokenKind::Loop).ignore_then(block).map(Expr::Loop);
 
         // primary := integer | float | string | bool | "(" expr ")" | struct_init | path
         // Boxed to cut the monomorphization chain — it has many .or() branches.
@@ -222,35 +240,19 @@ where
             })
             .boxed();
 
-        // cast = factor, [ "as", ptype ];
-        let cast: BoxedParser<'tokens, 'src, I, Expr> = factor
-            .clone()
-            .then(just(TokenKind::As).ignore_then(ptype.clone()).or_not())
-            .map(|(expr, to_type)| {
-                if let Some(_to_type) = to_type {
-                    Expr::Cast(ExprCast {
-                        expr: Box::new(expr),
-                        to_type: Box::new(_to_type),
-                    })
-                } else {
-                    expr
-                }
-            })
-            .boxed();
-
-        // unary = ( "*" | "&" | "!" | "-" ), cast | cast
+        // unary = ( "*" | "&" | "!" | "-" ), factor | factor
         let unary: BoxedParser<'tokens, 'src, I, Expr> = select! {
             TokenKind::Asterisk => Operator::Deref,
             TokenKind::And => Operator::Ref,
             TokenKind::Minus => Operator::Neg,
             TokenKind::Not => Operator::Not,
         }
-        .then(cast.clone())
+        .then(factor.clone())
         .map(|(op, expr)| Expr::UnaryOp {
             op,
             expr: Box::new(expr),
         })
-        .or(cast.clone())
+        .or(factor.clone())
         .boxed();
 
         // term := unary, { ("*" | "/"), term}
@@ -357,7 +359,7 @@ where
                 }
             });
 
-        if_expr.or(assign).or(logic_or)
+        if_expr.or(loop_expr).or(assign).or(logic_or)
     })
     .boxed()
 }
@@ -429,29 +431,6 @@ mod test {
                 op: Operator::Add,
                 right: Box::new(Expr::Value(ExprValue::Integer("2".to_string()))),
             }),
-        });
-
-        assert_eq!(unwrap_or_report!(result, source), expected);
-    }
-
-    #[test]
-    fn test_cast() {
-        let source = "value as i32";
-        let result = super::test_parse(source);
-
-        let expected = Expr::Cast(ExprCast {
-            expr: Box::new(Expr::Path(PathExpr {
-                segments: vec![Segment {
-                    name: Ident::new("value"),
-                    generics: None,
-                }],
-            })),
-            to_type: Box::new(Type::Path(PathExpr {
-                segments: vec![Segment {
-                    name: Ident::new("i32"),
-                    generics: None,
-                }],
-            })),
         });
 
         assert_eq!(unwrap_or_report!(result, source), expected);

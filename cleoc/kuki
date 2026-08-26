@@ -1,0 +1,7 @@
+#!/bin/bash
+
+cargo build > /dev/null
+
+cat -n test.cleo
+
+./target/debug/cleoc test.cleo

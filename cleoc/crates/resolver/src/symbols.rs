@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
+use errors::Error;
 use types::{DefID, ScopeID, TypeID};
 
 use crate::defkinds::{EnumDef, FnSig, StructDef, TraitDef, TypeAliasDef};
@@ -72,7 +73,7 @@ impl SymbolTable {
         ScopeID(0)
     }
 
-    pub fn push(&mut self, parent: ScopeID) -> Result<ScopeID, String> {
+    pub fn push(&mut self, parent: ScopeID) -> Result<ScopeID, Error> {
         let Some(_) = self.scopes.get(parent.0) else {
             return Err(format!("invalid parent scope: {:?}", parent.0));
         };

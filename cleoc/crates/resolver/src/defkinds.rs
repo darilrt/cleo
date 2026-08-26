@@ -7,6 +7,15 @@ pub struct StructDef {
     pub typeid: TypeID,
 }
 
+impl StructDef {
+    pub fn get_field(&self, name: &str) -> Option<TypeID> {
+        self.fields
+            .iter()
+            .find(|(field, _)| field == name)
+            .map(|v| v.1)
+    }
+}
+
 #[derive(Debug)]
 pub struct TraitDef {
     pub resolved: bool,

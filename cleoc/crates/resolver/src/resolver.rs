@@ -216,6 +216,6 @@ impl<'a> Resolver<'a> {
 pub enum Resolved {
     Value(TypeID),
     Type(TypeID, DefID),
-    EnumVariant(TypeID),
+    EnumValue(TypeID),
     Module(ScopeID),
 }

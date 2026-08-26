@@ -1,7 +1,11 @@
-type A = struct {
+type Foo = struct {
+    a: i32
     b: i32
 }
 
-fn main(arg_a: u8) {
-    var b: i32 = 10 + arg_a
+fn main() {
+    var a: Foo = Foo[i32] {
+        a = 10,
+        b = 20,
+    }
 }

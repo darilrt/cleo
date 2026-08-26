@@ -27,7 +27,8 @@ pub mod ast {
     pub use super::block::Block;
     pub use super::decl::Decl;
     pub use super::expr::{
-        Expr, ExprAccess, ExprCall, ExprIf, ExprInit, ExprInitField, ExprValue, Operator,
+        Expr, ExprAccess, ExprAssign, ExprCall, ExprIf, ExprInit, ExprInitField, ExprValue,
+        Operator,
     };
     pub use super::fn_decl::{FnDecl, FnParam, FnSignature};
     pub use super::generic_params::{GenericParam, GenericParams};

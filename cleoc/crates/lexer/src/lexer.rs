@@ -35,8 +35,6 @@ pub fn lex<'a>(src: &'a str) -> Result<Vec<Token<'a>>, LexerError> {
         };
 
         match token.kind {
-            // The synthetic EOF injected by the NewLine handler must not enter
-            // the token stream — it only exists so ASI can peek one token ahead.
             TokenKind::EOF => break,
             TokenKind::Comment => {
                 continue;
@@ -62,7 +60,6 @@ pub fn lex<'a>(src: &'a str) -> Result<Vec<Token<'a>>, LexerError> {
                     ahead.kind,
                     TokenKind::Plus
                         | TokenKind::Minus
-                        | TokenKind::Asterisk
                         | TokenKind::Slash
                         | TokenKind::Percent
                         | TokenKind::Dot

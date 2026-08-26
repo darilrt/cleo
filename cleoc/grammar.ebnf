@@ -148,11 +148,8 @@ unary
     = ( "*"
     | "&"
     | "!"
-    | "-" ), cast
-    | cast;
-
-cast
-    = factor, [ "as", type ];
+    | "-" ), factor
+    | factor;
 
 factor
     = primary, { accessor };

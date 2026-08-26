@@ -4,6 +4,7 @@ pub mod checker;
 pub mod context;
 pub mod defkinds;
 pub mod gather;
+pub mod methos;
 pub mod resolver;
 pub mod symbols;
 
