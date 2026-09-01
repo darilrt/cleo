@@ -1,5 +1,5 @@
 [package]
-name = "resolver"
+name = "codegen"
 version = "0.1.0"
 edition = "2024"
 
@@ -7,5 +7,6 @@ edition = "2024"
 types = { path = "../types" }
 parser = { path = "../parser" }
 errors = { path = "../errors" }
+resolver = { path = "../resolver" }
 ast = { path = "../ast" }
 typed_ast = { path = "../typed_ast" }

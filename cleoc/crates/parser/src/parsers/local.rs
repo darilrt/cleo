@@ -1,26 +1,12 @@
+use ast::{Binding, Expr, Local};
 use chumsky::{Parser, extra, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
 use crate::{
-    ast::{Expr, Ident, Type},
     errors::{BoxedParser, ParserError},
     parsers::{expr::expr, ident::ident},
     test_parser, type_parser,
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Local {
-    pub binding: Binding,
-    pub name: Ident,
-    pub var_type: Option<Type>,
-    pub initializer: Option<Box<Expr>>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Binding {
-    Var,
-    Const,
-}
 
 // local = ( "var" | "const" ), ident, [ ":", type ], [ "=", expr ];
 pub fn local_impl<'tokens, 'src: 'tokens, I>(
@@ -69,10 +55,7 @@ mod test {
     fn test_local_decl() {
         use super::*;
         use crate::unwrap_or_report;
-        use crate::{
-            ast::ExprValue,
-            parsers::path::{PathExpr, Segment},
-        };
+        use ast::{ExprValue, Ident, PathExpr, Segment, Type};
 
         let source = "var x: i32 = 42";
 

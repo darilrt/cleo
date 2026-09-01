@@ -1,3 +1,4 @@
+use ast::Unit;
 use chumsky::{
     Parser,
     input::Input,
@@ -6,7 +7,7 @@ use chumsky::{
 
 use crate::{
     errors::{self, Kind},
-    parsers::unit::{Unit, unit},
+    parsers::unit::unit,
 };
 
 mod block;
@@ -22,25 +23,6 @@ mod ptype;
 mod stmt;
 mod type_decl;
 mod unit;
-
-pub mod ast {
-    pub use super::block::Block;
-    pub use super::decl::Decl;
-    pub use super::expr::{
-        Expr, ExprAccess, ExprAssign, ExprCall, ExprIf, ExprInit, ExprInitField, ExprValue,
-        Operator,
-    };
-    pub use super::fn_decl::{FnDecl, FnParam, FnSignature};
-    pub use super::generic_params::{GenericParam, GenericParams};
-    pub use super::ident::Ident;
-    pub use super::import::ImportDecl;
-    pub use super::local::{Binding, Local};
-    pub use super::path::{PathExpr, Segment};
-    pub use super::ptype::Type;
-    pub use super::stmt::Stmt;
-    pub use super::type_decl::{EnumValue, StructField, TraitMethod, TypeBody, TypeDecl};
-    pub use super::unit::Unit;
-}
 
 pub fn parse<'a>(source: &'a str) -> errors::Result<'a, Unit> {
     use lexer::lex;

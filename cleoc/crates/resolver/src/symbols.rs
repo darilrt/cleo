@@ -75,7 +75,7 @@ impl SymbolTable {
 
     pub fn push(&mut self, parent: ScopeID) -> Result<ScopeID, Error> {
         let Some(_) = self.scopes.get(parent.0) else {
-            return Err(format!("invalid parent scope: {:?}", parent.0));
+            return Err(format!("invalid parent scope: {:?}", parent.0).into());
         };
 
         let id = ScopeID(self.scopes.len());
@@ -84,13 +84,16 @@ impl SymbolTable {
         Ok(id)
     }
 
-    pub fn define(&mut self, scope: ScopeID, def: Definition) -> Result<DefID, String> {
+    pub fn define(&mut self, scope: ScopeID, def: Definition) -> Result<DefID, Error> {
         let Some(scope) = self.scopes.get_mut(scope.0) else {
-            return Err(format!("invalid scope: {:?}", scope.0));
+            return Err(Error::Generic(format!("invalid scope: {:?}", scope.0)));
         };
 
         if scope.symbols.contains_key(&def.name) {
-            return Err(format!("symbol already defined: {}", def.name));
+            return Err(Error::Generic(format!(
+                "symbol already defined: {}",
+                def.name
+            )));
         }
 
         let def_id = DefID(self.defs.len());

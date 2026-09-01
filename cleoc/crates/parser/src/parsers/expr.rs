@@ -1,3 +1,7 @@
+use ast::{
+    AssignKind, Expr, ExprAccess, ExprAssign, ExprCall, ExprIf, ExprInit, ExprInitField, ExprValue,
+    Operator, Segment,
+};
 use chumsky::{
     IterParser, Parser,
     input::ValueInput,
@@ -8,137 +12,10 @@ use chumsky::{
 use lexer::TokenKind;
 
 use crate::{
-    ast::Ident,
     errors::BoxedParser,
-    parsers::{
-        block::{Block, block_impl},
-        ident::ident,
-        path::{PathExpr, Segment, segment},
-    },
+    parsers::{block::block_impl, ident::ident, path::segment},
     path_parser, type_parser,
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Expr {
-    Value(ExprValue),
-    BinaryOp {
-        left: Box<Expr>,
-        op: Operator,
-        right: Box<Expr>,
-    },
-    UnaryOp {
-        op: Operator,
-        expr: Box<Expr>,
-    },
-    Call(ExprCall),
-    Access(ExprAccess),
-    Path(PathExpr),
-    Init(ExprInit),
-    Assign(ExprAssign),
-    If(ExprIf),
-    Loop(Block),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprAssign {
-    pub left: Box<Expr>,
-    pub kind: AssignKind,
-    pub right: Box<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AssignKind {
-    Equal,    // =
-    AddEqual, // +=
-    SubEqual, // -=
-    MulEqual, // *=
-    DivEqual, // /=
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprInit {
-    pub path: PathExpr,
-    pub fields: Vec<ExprInitField>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprInitField {
-    pub name: Ident,
-    pub value: Box<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprIf {
-    pub condition: Box<Expr>,
-    pub then_branch: Block,
-    pub else_branch: Option<Block>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExprValue {
-    Integer(String),
-    Float(String),
-    Bool(bool),
-    String(String),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprAccess {
-    pub expr: Box<Expr>,
-    pub segment: Segment,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExprCall {
-    pub expr: Box<Expr>,
-    pub args: Vec<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Operator {
-    Add, // +
-    Sub, // -
-    Mul, // *
-    Div, // /
-
-    Deref, // *
-    Ref,   // &
-    Neg,   // -
-    Not,   // !
-
-    Equal,        // ==
-    NotEqual,     // !=
-    Less,         // <
-    Greater,      // >
-    LessEqual,    // <=
-    GreaterEqual, // >=
-
-    And, // &&
-    Or,  // ||
-}
-
-impl Operator {
-    pub fn name(&self) -> &str {
-        match self {
-            Operator::Add => "add",
-            Operator::Div => "divide",
-            Operator::Sub => "subtract",
-            Operator::Mul => "divde",
-            Operator::And
-            | Operator::Greater
-            | Operator::Equal
-            | Operator::Less
-            | Operator::GreaterEqual
-            | Operator::LessEqual
-            | Operator::NotEqual
-            | Operator::Or => "compare",
-            Operator::Deref => "dereference",
-            Operator::Neg => "negate",
-            Operator::Not => "invert",
-            Operator::Ref => "get reference",
-        }
-    }
-}
 
 // expr = if_expr | assign;
 pub fn expr<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, Expr>
@@ -400,9 +277,10 @@ pub(crate) fn test_parse<'a>(source: &'a str) -> crate::errors::Result<'a, Expr>
 
 #[allow(unused_imports)]
 mod test {
+    use ast::{Ident, PathExpr};
+
     use super::*;
     use crate::parsers::expr::*;
-    use crate::parsers::{ident::Ident, path::Segment};
     use crate::unwrap_or_report;
 
     #[test]

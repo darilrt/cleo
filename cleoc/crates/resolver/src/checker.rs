@@ -1,8 +1,9 @@
-use errors::Error;
-use parser::ast::{
+use ast::{
     Block, Decl, Expr, ExprAccess, ExprAssign, ExprCall, ExprIf, ExprInit, ExprValue, FnDecl,
     Operator, PathExpr, Stmt, Unit,
 };
+use errors::Error;
+use typed_ast::TypedUnit;
 use types::{DefID, ScopeID, TypeID, defs::TypeDef};
 
 use crate::{
@@ -31,19 +32,21 @@ impl<'a> Checker<'a> {
         Self { ctx }
     }
 
-    pub fn check(&mut self, scope: ScopeID, unit: &Unit) -> Result<(), Error> {
-        for decl in &unit.decls {
+    pub fn check(&mut self, scope: ScopeID, unit: Unit) -> Result<TypedUnit, Error> {
+        let mut out = TypedUnit { decls: Vec::new() };
+
+        for decl in unit.decls {
             match decl {
                 Decl::Fn(decl) => {
-                    self.resolve_fn(scope, decl)?;
+                    out.decls.push(self.resolve_fn(scope, decl)?);
                 }
                 _ => {}
             }
         }
-        Ok(())
+        Ok(out)
     }
 
-    pub fn resolve_fn(&mut self, scope: ScopeID, decl: &FnDecl) -> Result<(), Error> {
+    pub fn resolve_fn(&mut self, scope: ScopeID, decl: FnDecl) -> Result<typed_ast::FnDecl, Error> {
         let fn_name = decl.signature.name.str();
 
         let defid = self
@@ -64,8 +67,10 @@ impl<'a> Checker<'a> {
             })?
             .kind
         else {
-            return Err(format!("Definition for '{}' is not a function", fn_name));
+            return Err(format!("Definition for '{}' is not a function", fn_name).into());
         };
+
+        let typeid = sig.typeid;
 
         let TypeDef::FnPointer(fntype) = self
             .ctx
@@ -73,7 +78,7 @@ impl<'a> Checker<'a> {
             .get(sig.typeid)
             .ok_or_else(|| format!("Function type for '{}' not found in interner", fn_name))?
         else {
-            return Err(format!("Type for '{}' is not a function pointer", fn_name));
+            return Err(format!("Type for '{}' is not a function pointer", fn_name).into());
         };
 
         let body_scope = self.ctx.table.push(scope)?;
@@ -84,22 +89,22 @@ impl<'a> Checker<'a> {
                 fn_name,
                 fntype.params.len(),
                 decl.signature.params.len()
-            ));
+            )
+            .into());
         }
 
-        fntype
+        let params_defid = fntype
             .params
             .iter()
             .zip(&decl.signature.params)
-            .try_for_each(|(typeid, param)| {
+            .map(|(typeid, param)| {
                 let param_name = param.name.str();
 
                 self.ctx
                     .table
-                    .define(body_scope, Definition::var(param_name, typeid.clone()))?;
-
-                Ok::<(), Error>(())
-            })?;
+                    .define(body_scope, Definition::var(param_name, typeid.clone()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         self.resolve_block(
             body_scope,
@@ -111,7 +116,17 @@ impl<'a> Checker<'a> {
             },
         )?;
 
-        Ok(())
+        Ok(typed_ast::FnDecl {
+            signature: typed_ast::FnSignature {
+                name: decl.signature.name,
+                params: params_defid,
+            },
+            block: typed_ast::Block {
+                statements: Vec::new(),
+            },
+            scopeid: body_scope,
+            typeid,
+        })
     }
 
     pub fn resolve_block(
@@ -158,12 +173,12 @@ impl<'a> Checker<'a> {
         match stmt {
             Stmt::Break => {
                 if !block_ctx.allow_break {
-                    return Err("Not allowed Break here".to_string());
+                    return Err("Not allowed Break here".to_string().into());
                 }
             }
             Stmt::Continue => {
                 if !block_ctx.allow_continue {
-                    return Err("Not allowed Continue here".to_string());
+                    return Err("Not allowed Continue here".to_string().into());
                 }
             }
             Stmt::Return(value) => match (block_ctx.expected_return, value) {
@@ -171,10 +186,13 @@ impl<'a> Checker<'a> {
                     return Err(format!(
                         "expected return value of type {}",
                         self.ctx.type_name(expected)
-                    ));
+                    )
+                    .into());
                 }
                 (None, Some(_)) => {
-                    return Err("unexpected return value in void function".to_string());
+                    return Err("unexpected return value in void function"
+                        .to_string()
+                        .into());
                 }
                 (Some(expected), Some(expr)) => {
                     let ret_type = self.resolve_expr(scope, expr, block_ctx)?;
@@ -183,13 +201,14 @@ impl<'a> Checker<'a> {
                             "expected return type {}, found {}",
                             self.ctx.type_name(expected),
                             self.ctx.type_name(ret_type)
-                        ));
+                        )
+                        .into());
                     }
                 }
                 (None, None) => {}
             },
             Stmt::Local(local) => {
-                let var_type = self.ctx.type_to_id(
+                let var_type = self.ctx.resolve_id(
                     scope,
                     local
                         .var_type
@@ -205,7 +224,8 @@ impl<'a> Checker<'a> {
                             "expected {}, found {}",
                             self.ctx.type_name(var_type),
                             self.ctx.type_name(expr_type)
-                        ));
+                        )
+                        .into());
                     }
                 }
 
@@ -246,10 +266,7 @@ impl<'a> Checker<'a> {
             Expr::Path(path) => match self.resolve_pathexpr(scope, path)? {
                 Resolved::Value(typeid) => Ok(typeid),
                 Resolved::EnumValue(typeid) => Ok(typeid),
-                _ => Err(format!(
-                    "Expected value, found {:?} in path expression",
-                    path
-                )),
+                _ => Err(format!("Expected value, found {:?} in path expression", path).into()),
             },
             Expr::Call(expr) => self.resolve_callexpr(scope, expr, block_ctx),
             Expr::Assign(expr) => self.resolve_assign(scope, expr, block_ctx),
@@ -277,7 +294,7 @@ impl<'a> Checker<'a> {
     ) -> Result<TypeID, Error> {
         let typeid = match self.resolve_pathexpr(scope, &expr.path)? {
             Resolved::Type(typeid, _defid) => typeid,
-            _ => return Err(format!("not a struct")),
+            _ => return Err(format!("not a struct").into()),
         };
 
         let type_def = self
@@ -303,38 +320,42 @@ impl<'a> Checker<'a> {
         }?;
 
         if expr.fields.len() < struct_def.len() {
-            return Err(format!("missing struct fields"));
+            return Err(format!("missing struct fields").into());
         }
 
-        expr.fields.iter().try_for_each(|field| {
-            let field_type = struct_def.iter().find_map(|(name, typeid)| {
-                if name == &field.name.string() {
-                    Some(typeid)
-                } else {
-                    None
+        expr.fields
+            .iter()
+            .try_for_each::<_, Result<(), Error>>(|field| {
+                let field_type = struct_def.iter().find_map(|(name, typeid)| {
+                    if name == &field.name.string() {
+                        Some(typeid)
+                    } else {
+                        None
+                    }
+                });
+
+                let Some(typeid) = field_type else {
+                    return Err(format!(
+                        "{} does not have field '{}'",
+                        self.ctx.type_name(typeid),
+                        field.name.str()
+                    )
+                    .into());
+                };
+
+                let exprid = self.resolve_expr(scope, &field.value, block_ctx)?;
+
+                if &exprid != typeid {
+                    return Err(format!(
+                        "expected {}, found {}",
+                        self.ctx.type_name(*typeid),
+                        self.ctx.type_name(exprid)
+                    )
+                    .into());
                 }
-            });
 
-            let Some(typeid) = field_type else {
-                return Err(format!(
-                    "{} does not have field '{}'",
-                    self.ctx.type_name(typeid),
-                    field.name.str()
-                ));
-            };
-
-            let exprid = self.resolve_expr(scope, &field.value, block_ctx)?;
-
-            if &exprid != typeid {
-                return Err(format!(
-                    "expected {}, found {}",
-                    self.ctx.type_name(*typeid),
-                    self.ctx.type_name(exprid)
-                ));
-            }
-
-            Ok(())
-        })?;
+                Ok(())
+            })?;
 
         Ok(typeid)
     }
@@ -351,7 +372,8 @@ impl<'a> Checker<'a> {
             return Err(format!(
                 "expected bool in if condition, found {}",
                 self.ctx.type_name(condition)
-            ));
+            )
+            .into());
         }
 
         let then_return = {
@@ -373,7 +395,8 @@ impl<'a> Checker<'a> {
                 "if branches have incompatible types: {} and {}",
                 self.ctx.type_name(then_return),
                 self.ctx.type_name(else_return)
-            ))
+            )
+            .into())
         }
     }
 
@@ -398,7 +421,7 @@ impl<'a> Checker<'a> {
         block_ctx: &BlockCtx,
     ) -> Result<TypeID, Error> {
         if !self.is_lvalue(&expr.left) {
-            return Err("invalid left-hand side of assignment".to_string());
+            return Err("invalid left-hand side of assignment".to_string().into());
         }
 
         let left = self.resolve_expr(scope, &expr.left, block_ctx)?;
@@ -409,7 +432,8 @@ impl<'a> Checker<'a> {
                 "expected {}, found {}",
                 self.ctx.type_name(left),
                 self.ctx.type_name(right)
-            ));
+            )
+            .into());
         }
 
         Ok(self.ctx.primitives.void)
@@ -441,10 +465,9 @@ impl<'a> Checker<'a> {
                 .get(fn_typeid)
                 .ok_or_else(|| format!("type {} does not exists", fn_typeid.0))?
             else {
-                return Err(format!(
-                    "type {} is not callable",
-                    self.ctx.type_name(fn_typeid)
-                ));
+                return Err(
+                    format!("type {} is not callable", self.ctx.type_name(fn_typeid)).into(),
+                );
             };
 
             if fn_type.params.len() != expr.args.len() {
@@ -452,7 +475,8 @@ impl<'a> Checker<'a> {
                     "expected {} arguments, found {}",
                     fn_type.params.len(),
                     expr.args.len()
-                ));
+                )
+                .into());
             }
 
             (fn_type.params.clone(), fn_type.return_type)
@@ -466,7 +490,8 @@ impl<'a> Checker<'a> {
                     "expected {}, found {}",
                     self.ctx.type_name(*param),
                     self.ctx.type_name(arg)
-                ));
+                )
+                .into());
             }
         }
 
@@ -487,17 +512,14 @@ impl<'a> Checker<'a> {
                 if self.ctx.primitives.is_negatable(typeid) {
                     Ok(typeid)
                 } else {
-                    Err(format!("cannot negate {}", self.ctx.type_name(typeid)))
+                    Err(format!("cannot negate {}", self.ctx.type_name(typeid)).into())
                 }
             }
             Operator::Not => {
                 if self.ctx.primitives.is_bool(typeid) {
                     Ok(typeid)
                 } else {
-                    Err(format!(
-                        "expected bool, found {}",
-                        self.ctx.type_name(typeid)
-                    ))
+                    Err(format!("expected bool, found {}", self.ctx.type_name(typeid)).into())
                 }
             }
             Operator::Deref => match self
@@ -510,7 +532,7 @@ impl<'a> Checker<'a> {
                     pointee,
                     mutability: _,
                 } => Ok(*pointee),
-                _ => Err(format!("cannot dereference {}", self.ctx.type_name(typeid))),
+                _ => Err(format!("cannot dereference {}", self.ctx.type_name(typeid)).into()),
             },
             Operator::Ref => match self
                 .ctx
@@ -555,7 +577,8 @@ impl<'a> Checker<'a> {
                         op.name(),
                         self.ctx.type_name(l),
                         self.ctx.type_name(r)
-                    ))
+                    )
+                    .into())
                 }
             }
             Operator::Equal | Operator::NotEqual => {
@@ -566,7 +589,8 @@ impl<'a> Checker<'a> {
                         "cannot compare {} and {}",
                         self.ctx.type_name(l),
                         self.ctx.type_name(r)
-                    ))
+                    )
+                    .into())
                 }
             }
             Operator::Less | Operator::Greater | Operator::LessEqual | Operator::GreaterEqual => {
@@ -577,7 +601,8 @@ impl<'a> Checker<'a> {
                         "cannot compare {} and {}",
                         self.ctx.type_name(l),
                         self.ctx.type_name(r)
-                    ))
+                    )
+                    .into())
                 }
             }
             Operator::And | Operator::Or => {
@@ -588,7 +613,8 @@ impl<'a> Checker<'a> {
                         "expected bool, found {} and {}",
                         self.ctx.type_name(l),
                         self.ctx.type_name(r)
-                    ))
+                    )
+                    .into())
                 }
             }
             Operator::Deref | Operator::Neg | Operator::Ref | Operator::Not => {
@@ -601,7 +627,7 @@ impl<'a> Checker<'a> {
         let mut it = path.segments.iter();
         let first = it
             .next()
-            .ok_or_else(|| "expected at least 1 segment in PathExpr")?;
+            .ok_or_else(|| "expected at least 1 segment in PathExpr".to_string())?;
 
         let defid = self
             .ctx
@@ -663,23 +689,23 @@ impl<'a> Checker<'a> {
                         if enum_def.values.contains(&name.to_string()) {
                             Ok(Resolved::EnumValue(typeid))
                         } else {
-                            Err(format!("enum '{}' has no value '{}'", def.name, name))
+                            Err(format!("enum '{}' has no value '{}'", def.name, name).into())
                         }
                     }
                     DefKind::Struct(_) => Err(format!(
                         "cannot access '{}' on type '{}', use an instance",
                         name, def.name
-                    )),
+                    )
+                    .into()),
                     DefKind::Trait(_) => {
-                        Err(format!("cannot access '{}' on trait '{}'", name, def.name))
+                        Err(format!("cannot access '{}' on trait '{}'", name, def.name).into())
                     }
-                    _ => Err(format!("cannot access '{}' on '{}'", name, def.name)),
+                    _ => Err(format!("cannot access '{}' on '{}'", name, def.name).into()),
                 }
             }
-            Resolved::EnumValue(_typeid) => Err(format!(
-                "cannot access '{}' on enum variant, use an instance",
-                name
-            )),
+            Resolved::EnumValue(_typeid) => {
+                Err(format!("cannot access '{}' on enum variant, use an instance", name).into())
+            }
         }
     }
 
@@ -699,7 +725,7 @@ impl<'a> Checker<'a> {
                 .ctx
                 .table
                 .get_def(method)
-                .ok_or_else(|| "internal: method DefID not found")?;
+                .ok_or_else(|| "internal: method DefID not found".to_string())?;
 
             match &def.kind {
                 DefKind::Function(fnsig) => Ok(fnsig.typeid),
@@ -714,24 +740,29 @@ impl<'a> Checker<'a> {
 
                     match &def.kind {
                         DefKind::Struct(def) => def.get_field(name).ok_or_else(|| {
-                            format!(
-                                "no field \"{}\" on type {}",
-                                name,
-                                self.ctx.type_name(typeid)
-                            )
+                            {
+                                format!(
+                                    "no field \"{}\" on type {}",
+                                    name,
+                                    self.ctx.type_name(typeid)
+                                )
+                            }
+                            .into()
                         }),
                         _ => Err(format!(
                             "no field \"{}\" on type {}",
                             name,
                             self.ctx.type_name(typeid)
-                        )),
+                        )
+                        .into()),
                     }
                 }
                 _ => Err(format!(
                     "no field \"{}\" on type {}",
                     name,
                     self.ctx.type_name(typeid)
-                )),
+                )
+                .into()),
             }
         } else {
             unreachable!("TypeID {} not found in interner", typeid.0)

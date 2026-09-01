@@ -1,12 +1,9 @@
 use chumsky::{IterParser, Parser, input::ValueInput, prelude::end, span::SimpleSpan};
 use lexer::TokenKind;
 
-use crate::{ast::Decl, errors::BoxedParser, parsers::decl::decl};
+use ast::Unit;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Unit {
-    pub decls: Vec<Decl>,
-}
+use crate::{errors::BoxedParser, parsers::decl::decl};
 
 pub fn unit<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, Unit>
 where

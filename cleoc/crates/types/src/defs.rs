@@ -24,3 +24,12 @@ pub enum Signedness {
     Signed,
     Unsigned,
 }
+
+impl Signedness {
+    pub fn to_prefix<'a>(&self) -> &'a str {
+        match self {
+            Signedness::Signed => "i",
+            Signedness::Unsigned => "u",
+        }
+    }
+}

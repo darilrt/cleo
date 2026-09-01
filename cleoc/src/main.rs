@@ -79,19 +79,22 @@ fn main() {
 
     match resolve(&mut ctx, root, &unit) {
         Err(err) => {
-            println!("Resolve error: {}", err);
+            println!("Resolve error: {:?}", err);
             return;
         }
         Ok(_) => {}
     }
 
-    match check(&mut ctx, root, &unit) {
-        Err(err) => {
-            println!("Check error: {}", err);
-            return;
-        }
-        Ok(_) => {}
-    }
+    let unit = check(&mut ctx, root, unit).expect("Check error: ");
+    println!("{:?}", unit);
 
-    println!("{}", ctx.debug(types::ScopeID(0), false));
+    let mut output = Vec::new();
+    if let Err(err) = codegen::generate(&mut ctx, &mut output, root, &unit) {
+        println!("Codegen error: {:?}", err);
+        return;
+    }
+    let s = std::str::from_utf8(&output).unwrap();
+    println!("{}", s);
+
+    // println!("{}", ctx.debug(types::ScopeID(0), false));
 }

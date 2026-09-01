@@ -1,4 +1,4 @@
-use parser::ast::Type;
+use ast::Type;
 use types::{
     ScopeID, TypeID, TypeInterner,
     defs::{Signedness, TypeDef},
@@ -55,24 +55,24 @@ impl Context {
         self.primitives = primitives;
     }
 
-    pub fn type_to_id(&mut self, scope: ScopeID, ast: &Type) -> Result<TypeID, String> {
+    pub fn resolve_id(&mut self, scope: ScopeID, ast: &Type) -> Result<TypeID, String> {
         match ast {
             Type::Ptr(node) => {
-                let pointee = self.type_to_id(scope, node)?;
+                let pointee = self.resolve_id(scope, node)?;
                 Ok(self.interner.intern(TypeDef::Pointer {
                     pointee,
                     mutability: true,
                 }))
             }
             Type::ConstPtr(node) => {
-                let pointee = self.type_to_id(scope, node)?;
+                let pointee = self.resolve_id(scope, node)?;
                 Ok(self.interner.intern(TypeDef::Pointer {
                     pointee,
                     mutability: false,
                 }))
             }
             Type::Array(size, node) => {
-                let element = self.type_to_id(scope, node)?;
+                let element = self.resolve_id(scope, node)?;
                 Ok(self.interner.intern(TypeDef::Array {
                     element,
                     size: *size,

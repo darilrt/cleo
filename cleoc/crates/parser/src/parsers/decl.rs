@@ -1,23 +1,11 @@
+use ast::Decl;
 use chumsky::{Parser, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
 use crate::{
-    ast::TypeDecl,
     errors::BoxedParser,
-    parsers::{
-        fn_decl::{FnDecl, fn_decl},
-        import::{ImportDecl, import_decl},
-        type_decl::type_decl,
-    },
+    parsers::{fn_decl::fn_decl, import::import_decl, type_decl::type_decl},
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Decl {
-    Fn(FnDecl),
-    Type(TypeDecl),
-    Import(ImportDecl),
-    Pub(Box<Decl>),
-}
 
 pub fn decl<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, Decl>
 where

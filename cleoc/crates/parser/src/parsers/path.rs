@@ -1,28 +1,17 @@
+use ast::{Ident, PathExpr, Segment, Type};
 use chumsky::{IterParser, Parser, extra, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
 use crate::{
     errors::{BoxedParser, ParserError},
-    parsers::{
-        ident::{Ident, ident},
-        ptype::Type,
-    },
+    parsers::ident::ident,
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct PathExpr {
-    pub segments: Vec<Segment>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Segment {
-    pub name: Ident,
-    pub generics: Option<Vec<Type>>,
-}
 
 // segment := ident [ "[" generic_list "]" ]
 pub fn segment<'tokens, 'src: 'tokens, I>(
-    ptype: impl chumsky::Parser<'tokens, I, Type, extra::Err<ParserError<'tokens, 'src>>> + Clone + 'tokens,
+    ptype: impl chumsky::Parser<'tokens, I, Type, extra::Err<ParserError<'tokens, 'src>>>
+    + Clone
+    + 'tokens,
 ) -> BoxedParser<'tokens, 'src, I, Segment>
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
@@ -51,7 +40,9 @@ where
 // `self` is only valid as the first segment of a path (e.g. self.field, self.method()).
 // It cannot appear after a dot — that is a semantic error caught by the analyzer.
 pub fn path_impl<'tokens, 'src: 'tokens, I>(
-    ptype: impl chumsky::Parser<'tokens, I, Type, extra::Err<ParserError<'tokens, 'src>>> + Clone + 'tokens,
+    ptype: impl chumsky::Parser<'tokens, I, Type, extra::Err<ParserError<'tokens, 'src>>>
+    + Clone
+    + 'tokens,
 ) -> BoxedParser<'tokens, 'src, I, PathExpr>
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
@@ -60,7 +51,10 @@ where
 
     // `self` as first segment, followed by zero or more ".segment" continuations.
     let self_path = just(TokenKind::SelfKw)
-        .map(|_| Segment { name: Ident::new("self"), generics: None })
+        .map(|_| Segment {
+            name: Ident::new("self"),
+            generics: None,
+        })
         .then(
             just(TokenKind::Dot)
                 .ignore_then(seg.clone())

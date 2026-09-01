@@ -37,6 +37,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ast"
+version = "0.1.0"
+
+[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -77,8 +81,21 @@ name = "cleoc"
 version = "0.1.0"
 dependencies = [
  "ariadne",
+ "codegen",
  "parser",
  "resolver",
+ "types",
+]
+
+[[package]]
+name = "codegen"
+version = "0.1.0"
+dependencies = [
+ "ast",
+ "errors",
+ "parser",
+ "resolver",
+ "typed_ast",
  "types",
 ]
 
@@ -188,6 +205,7 @@ name = "parser"
 version = "0.1.0"
 dependencies = [
  "ariadne",
+ "ast",
  "chumsky",
  "lexer",
 ]
@@ -258,8 +276,10 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 name = "resolver"
 version = "0.1.0"
 dependencies = [
+ "ast",
  "errors",
  "parser",
+ "typed_ast",
  "types",
 ]
 
@@ -336,6 +356,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "typed_ast"
+version = "0.1.0"
+dependencies = [
+ "ast",
+ "types",
 ]
 
 [[package]]

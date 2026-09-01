@@ -1,3 +1,4 @@
+use ast::{PathExpr, Type};
 use chumsky::{
     IterParser, Parser, extra,
     input::ValueInput,
@@ -9,17 +10,8 @@ use lexer::TokenKind;
 
 use crate::{
     errors::{BoxedParser, ParserError},
-    parsers::path::{PathExpr, path_impl},
+    parsers::path::path_impl,
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Type {
-    Ptr(Box<Type>),
-    ConstPtr(Box<Type>),
-    Path(PathExpr),
-    Array(usize, Box<Type>),
-}
-
 // type := array ptr path
 pub fn ptype_impl<'tokens, 'src: 'tokens, I>(
     path: impl chumsky::Parser<'tokens, I, PathExpr, extra::Err<ParserError<'tokens, 'src>>> + Clone,
@@ -142,10 +134,9 @@ mod test {
     #[allow(unused)]
     use super::*;
     #[allow(unused)]
-    use crate::parsers::{ident::Ident, path::Segment};
-
     #[test]
     fn test_type() {
+        use ast::{Ident, Segment};
         let test = test_parse("[1][5]*const A.B[*u8, i32]").unwrap();
 
         assert_eq!(

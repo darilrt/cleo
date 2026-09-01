@@ -1,23 +1,8 @@
+use ast::{GenericParam, GenericParams};
 use chumsky::{IterParser, Parser, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
-use crate::{
-    errors::BoxedParser,
-    parsers::{
-        ident::{Ident, ident},
-        ptype::Type,
-    },
-    test_parser, type_parser,
-};
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct GenericParams(pub Vec<GenericParam>);
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct GenericParam {
-    pub name: Ident,
-    pub bound: Option<Type>,
-}
+use crate::{errors::BoxedParser, parsers::ident::ident, test_parser, type_parser};
 
 // generic_params = "[", [ generic_param, { ",", generic_param }, [ "," ] ], "]";
 pub fn generic_params<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, GenericParams>
@@ -48,9 +33,7 @@ mod test {
     fn test_generic_params() {
         use super::test_parse;
         use crate::parsers::generic_params::{GenericParam, GenericParams};
-        use crate::parsers::ident::Ident;
-        use crate::parsers::path::{PathExpr, Segment};
-        use crate::parsers::ptype::Type;
+        use ast::{Ident, PathExpr, Segment, Type};
 
         let input = "[T, U: *const i32, V]";
         let result = test_parse(input).unwrap();

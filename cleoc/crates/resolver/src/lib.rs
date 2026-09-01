@@ -1,3 +1,4 @@
+use errors::Error;
 use types::ScopeID;
 
 pub mod checker;
@@ -8,18 +9,14 @@ pub mod methos;
 pub mod resolver;
 pub mod symbols;
 
-pub fn resolve(
-    ctx: &mut context::Context,
-    scope: ScopeID,
-    unit: &parser::ast::Unit,
-) -> Result<(), String> {
+pub fn resolve(ctx: &mut context::Context, scope: ScopeID, unit: &ast::Unit) -> Result<(), Error> {
     resolver::Resolver::new(ctx).resolve(scope, unit)
 }
 
 pub fn check(
     ctx: &mut context::Context,
     scope: ScopeID,
-    unit: &parser::ast::Unit,
-) -> Result<(), String> {
+    unit: ast::Unit,
+) -> Result<typed_ast::TypedUnit, Error> {
     checker::Checker::new(ctx).check(scope, unit)
 }

@@ -1,4 +1,4 @@
-use parser::ast::{Decl, TypeBody, TypeDecl, Unit};
+use ast::{Decl, TypeBody, TypeDecl, Unit};
 use types::{ScopeID, TypeID, TypeInterner, defs::TypeDef};
 
 use crate::{

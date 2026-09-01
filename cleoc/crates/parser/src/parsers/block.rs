@@ -1,18 +1,11 @@
+use ast::{Block, Expr, Stmt};
 use chumsky::{IterParser, Parser, extra, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
 use crate::{
     errors::{BoxedParser, ParserError},
-    parsers::{
-        expr::{Expr, expr},
-        stmt::{Stmt, stmt_impl},
-    },
+    parsers::{expr::expr, stmt::stmt_impl},
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Block {
-    pub statements: Vec<Stmt>,
-}
 
 // block = '{', { stmt, ';' }, '}'
 pub fn block_impl<'tokens, 'src: 'tokens, I>(

@@ -5,15 +5,18 @@ edition = "2024"
 
 [workspace]
 members = [
+    "crates/codegen",
     "crates/errors",
     "crates/lexer",
     "crates/parser",
     "crates/resolver",
     "crates/types",
+    "crates/codegen", "crates/ast", "crates/typed_ast",
 ]
 
 [dependencies]
 parser = { path = "./crates/parser" }
 resolver = { path = "./crates/resolver" }
 types = { path = "./crates/types" }
+codegen = { path = "./crates/codegen" }
 ariadne = "0.6.0"

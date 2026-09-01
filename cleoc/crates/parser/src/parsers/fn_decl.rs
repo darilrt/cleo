@@ -1,36 +1,12 @@
+use ast::{FnDecl, FnParam, FnSignature, Ident};
 use chumsky::{IterParser, Parser, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
 use crate::{
     errors::BoxedParser,
-    parsers::{
-        block::{Block, block},
-        generic_params::{GenericParams, generic_params},
-        ident::{Ident, ident},
-        ptype::Type,
-    },
+    parsers::{block::block, generic_params::generic_params, ident::ident},
     test_parser, type_parser,
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FnDecl {
-    pub signature: FnSignature,
-    pub block: Block,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FnSignature {
-    pub name: Ident,
-    pub generics: Option<GenericParams>,
-    pub params: Vec<FnParam>,
-    pub return_type: Option<Type>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct FnParam {
-    pub name: Ident,
-    pub ty: Type,
-}
 
 // signature := ident generic_list? parameter_list return_type?
 pub fn fn_signature<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, FnSignature>
@@ -117,8 +93,7 @@ mod test {
     #[test]
     fn test_fn_decl_parser() {
         use super::*;
-        use crate::parsers::generic_params::GenericParam;
-        use crate::parsers::path::{PathExpr, Segment};
+        use ast::{Block, GenericParam, GenericParams, PathExpr, Segment, Type};
 
         let source = "fn foo[T: int, U](x: int, y: U) int { }";
         let result = test_parse(source);

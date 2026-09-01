@@ -1,47 +1,12 @@
+use ast::{EnumValue, StructField, TraitMethod, TypeBody, TypeDecl};
 use chumsky::{IterParser, Parser, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
 use crate::{
     errors::BoxedParser,
-    parsers::{
-        fn_decl::{FnSignature, fn_signature},
-        generic_params::{GenericParams, generic_params},
-        ident::{Ident, ident},
-        ptype::Type,
-    },
+    parsers::{fn_decl::fn_signature, generic_params::generic_params, ident::ident},
     test_parser, type_parser,
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TypeDecl {
-    pub name: Ident,
-    pub generics: Option<GenericParams>,
-    pub body: TypeBody,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TypeBody {
-    Struct(Vec<StructField>),
-    Alias(Type),
-    Trait(Vec<TraitMethod>),
-    Enum(Vec<EnumValue>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct EnumValue {
-    pub name: Ident,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct StructField {
-    pub name: Ident,
-    pub field_type: Type,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TraitMethod {
-    pub signature: FnSignature,
-}
 
 pub fn type_decl<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, TypeDecl>
 where
@@ -108,12 +73,14 @@ where
 test_parser!(type_decl() => TypeDecl);
 
 mod test {
+
     #[allow(unused_imports)]
     use crate::unwrap_or_report;
 
     #[test]
     fn test_enum() {
         use super::*;
+        use ast::Ident;
 
         let source = r#"type Color = enum {
     Red,
@@ -142,7 +109,7 @@ mod test {
     #[test]
     fn test_trait() {
         use super::*;
-        use crate::parsers::fn_decl::FnSignature;
+        use ast::{FnSignature, Ident, PathExpr, Segment, Type};
 
         let source = r#"type Drawable = trait { 
     fn draw()
@@ -170,8 +137,8 @@ mod test {
                             name: Ident::new("size"),
                             generics: None,
                             params: vec![],
-                            return_type: Some(Type::Path(crate::parsers::path::PathExpr {
-                                segments: vec![crate::parsers::path::Segment {
+                            return_type: Some(Type::Path(PathExpr {
+                                segments: vec![Segment {
                                     name: Ident::new("i32"),
                                     generics: None,
                                 },],
@@ -186,7 +153,7 @@ mod test {
     #[test]
     fn test_alias() {
         use super::*;
-        use crate::parsers::path::{PathExpr, Segment};
+        use ast::{Ident, PathExpr, Segment, Type};
 
         let source = r#"type Alias = Point[Int]"#;
 
@@ -215,10 +182,7 @@ mod test {
     #[test]
     fn test_struct() {
         use super::*;
-        use crate::parsers::{
-            generic_params::GenericParam,
-            path::{PathExpr, Segment},
-        };
+        use ast::*;
 
         let source = r#"type Point[T] = struct {
     x: Int,

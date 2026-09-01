@@ -120,3 +120,29 @@ macro_rules! unwrap_or_report_file {
         }
     }};
 }
+
+#[macro_export]
+macro_rules! extract_field {
+    ($items:expr, $Enum:ident::$Variant:ident { $field:ident }) => {
+        $items.iter().filter_map(|item| {
+            if let $Enum::$Variant { $field } = item {
+                Some(*$field)
+            } else {
+                None
+            }
+        })
+    };
+}
+
+#[macro_export]
+macro_rules! extract_tuple {
+    ($items:expr, $Enum:ident::$Variant:ident) => {
+        $items.iter().filter_map(|item| {
+            if let $Enum::$Variant(inner) = item {
+                Some(inner)
+            } else {
+                None
+            }
+        })
+    };
+}

@@ -1,5 +1,5 @@
+use ast::{Decl, FnDecl, TypeBody, TypeDecl, Unit};
 use errors::Error;
-use parser::ast::{Decl, FnDecl, TypeBody, TypeDecl, Unit};
 use types::{
     DefID, ScopeID, TypeID,
     defs::{FnPointerType, TypeDef},
@@ -49,7 +49,7 @@ impl<'a> Resolver<'a> {
             .params
             .iter()
             .map(|param| {
-                let ty = self.ctx.type_to_id(scope, &param.ty)?;
+                let ty = self.ctx.resolve_id(scope, &param.ty)?;
                 Ok((param.name.str().to_string(), ty))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -57,7 +57,7 @@ impl<'a> Resolver<'a> {
         {
             let fn_name = decl.signature.name.str();
             let ret_typeid = match &decl.signature.return_type {
-                Some(ty) => self.ctx.type_to_id(scope, ty)?,
+                Some(ty) => self.ctx.resolve_id(scope, ty)?,
                 None => self.ctx.interner.intern(TypeDef::Void),
             };
 
@@ -78,7 +78,8 @@ impl<'a> Resolver<'a> {
                 return Err(format!(
                     "Expected function definition for '{}', found {:?}",
                     fn_name, func_def.kind
-                ));
+                )
+                .into());
             };
 
             let typeid = self.ctx.interner.intern(TypeDef::FnPointer(FnPointerType {
@@ -104,7 +105,7 @@ impl<'a> Resolver<'a> {
 
         match &body {
             TypeBody::Alias(ty) => {
-                let typeid = self.ctx.type_to_id(scope, ty)?;
+                let typeid = self.ctx.resolve_id(scope, ty)?;
 
                 let def = self
                     .ctx
@@ -152,7 +153,7 @@ impl<'a> Resolver<'a> {
                 let fields = fields
                     .iter()
                     .map(|field| {
-                        let field_typeid = self.ctx.type_to_id(scope, &field.field_type)?;
+                        let field_typeid = self.ctx.resolve_id(scope, &field.field_type)?;
                         Ok((field.name.string(), field_typeid))
                     })
                     .collect::<Result<Vec<_>, String>>()?;

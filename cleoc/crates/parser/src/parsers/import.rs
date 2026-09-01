@@ -1,12 +1,8 @@
+use ast::ImportDecl;
 use chumsky::{IterParser, Parser, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
-use crate::{ast::Ident, errors::BoxedParser, parsers::ident::ident};
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ImportDecl {
-    pub path: Vec<Ident>,
-}
+use crate::{errors::BoxedParser, parsers::ident::ident};
 
 // import_decl = "import", import_path;
 pub fn import_decl<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, ImportDecl>

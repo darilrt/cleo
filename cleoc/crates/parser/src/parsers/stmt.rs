@@ -1,23 +1,11 @@
+use ast::{Expr, Stmt};
 use chumsky::{Parser, extra, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
 use crate::{
     errors::{BoxedParser, ParserError},
-    parsers::{
-        expr::Expr,
-        local::{Local, local_impl},
-    },
+    parsers::local::local_impl,
 };
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Stmt {
-    Expr(Expr),
-    Defer(Expr),
-    Return(Option<Expr>),
-    Break,
-    Continue,
-    Local(Local),
-}
 
 // stmt = local | defer | return | break | continue | expr;
 pub fn stmt_impl<'tokens, 'src: 'tokens, I>(

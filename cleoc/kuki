@@ -4,4 +4,9 @@ cargo build > /dev/null
 
 cat -n test.cleo
 
+echo ""
+echo ""
+echo "==== OUTPUT ===="
+echo ""
+
 ./target/debug/cleoc test.cleo
