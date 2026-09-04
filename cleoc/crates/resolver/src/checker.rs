@@ -43,6 +43,7 @@ impl<'a> Checker<'a> {
                 _ => {}
             }
         }
+
         Ok(out)
     }
 

@@ -5,7 +5,7 @@ use errors::Error;
 use resolver::{context, defkinds::FnSig, symbols::DefKind};
 use types::{ScopeID, TypeID, defs::TypeDef};
 
-use crate::bodyemitter::BodyEmitter;
+use crate::{bodyemitter::BodyEmitter, ir::FnIR};
 
 pub struct Codegen<'a> {
     ctx: &'a context::Context,
@@ -113,40 +113,9 @@ impl<'a> Codegen<'a> {
         &self,
         buffer: &mut impl io::Write,
         scope: ScopeID,
-        decl: &FnDecl,
+        decl: &FnIR,
     ) -> Result<(), Error> {
-        let fnsig = {
-            let defid = self
-                .ctx
-                .table
-                .lookup(scope, decl.signature.name.str())
-                .ok_or_else(|| {
-                    format!(
-                        "Funciton {} not found in the current scope",
-                        decl.signature.name.str()
-                    )
-                })?;
-
-            match self.ctx.table.get_def(defid) {
-                Some(def) => match &def.kind {
-                    DefKind::Function(fnsig) => fnsig,
-                    _ => unreachable!("What?"),
-                },
-                None => unreachable!("O.o?"),
-            }
-        };
-
-        self.emit_fn_sig(buffer, fnsig)?;
-
-        writeln!(buffer, " {{")?;
-
-        {
-            let mut emitter = BodyEmitter::new(&self.ctx, &decl.block.statements);
-            emitter.emit(buffer)?;
-        }
-
-        writeln!(buffer, "}}\n")?;
-
+        self.emit_fn_sig(buffer, &decl.sig)?;
         Ok(())
     }
 

@@ -5,6 +5,7 @@ pub mod ir;
 mod lower;
 
 pub use lower::lower;
+use parser::extract_tuple;
 
 use std::io;
 
@@ -19,15 +20,15 @@ pub fn generate(
     scope: ScopeID,
     unit: &TypedUnit,
 ) -> Result<(), Error> {
-    let ir = lower(unit)?;
+    let ir = lower(scope, unit)?;
 
-    // let codegen = codegen::Codegen::new(ctx);
+    let codegen = codegen::Codegen::new(ctx);
 
-    // codegen.emit_header(buffer, scope)?;
+    codegen.emit_header(buffer, scope)?;
 
-    // // for decl in extract_tuple!(&unit.decls, Decl::Fn) {
-    // //     codegen.emit_fn_def(buffer, scope, decl)?;
-    // // }
+    for decl in ir.fns() {
+        codegen.emit_fn_def(buffer, scope, fnir)?;
+    }
 
     Ok(())
 }
