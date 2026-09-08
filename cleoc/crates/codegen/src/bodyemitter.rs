@@ -1,13 +1,15 @@
 use std::io;
 
-use ast::{Expr, ExprValue, Stmt};
 use errors::Error;
 use resolver::context::Context;
+use types::ScopeID;
+
+use crate::ir::{ExprIR, FnIR, StmtIR};
 
 #[allow(unused)]
 pub struct BodyEmitter<'a, 's, 'b> {
     ctx: &'a Context,
-    stmts: &'s [Stmt],
+    ir: &'s FnIR,
     temps: u32,
     indent: u32,
     frames: Vec<Frame<'b>>,
@@ -15,26 +17,26 @@ pub struct BodyEmitter<'a, 's, 'b> {
 
 #[allow(unused)]
 struct Frame<'a> {
-    defers: Vec<&'a Stmt>,
+    defers: Vec<&'a StmtIR>,
 }
 
 impl<'a, 's, 'b> BodyEmitter<'a, 's, 'b> {
-    pub fn new(ctx: &'a Context, stmts: &'s [Stmt]) -> Self {
+    pub fn new(ctx: &'a Context, ir: &'s FnIR) -> Self {
         Self {
             ctx,
-            stmts,
+            ir,
             temps: 0,
             indent: 1,
             frames: Vec::new(),
         }
     }
 
-    pub fn emit(&mut self, buffer: &mut impl io::Write) -> Result<(), Error> {
-        for stmt in self.stmts {
+    pub fn emit(&mut self, buffer: &mut impl io::Write, _scope: ScopeID) -> Result<(), Error> {
+        for stmt in self.ir.body.iter() {
             emit_identation(buffer, self.indent)?;
+
             match stmt {
-                Stmt::Expr(expr) => self.emit_expr(buffer, expr),
-                _ => unimplemented!(""),
+                StmtIR::Expr(expr) => self.emit_expr(buffer, expr),
             }?;
 
             writeln!(buffer, ";")?;
@@ -43,25 +45,10 @@ impl<'a, 's, 'b> BodyEmitter<'a, 's, 'b> {
         Ok(())
     }
 
-    fn emit_expr(&self, buffer: &mut impl io::Write, expr: &Expr) -> Result<(), Error> {
+    fn emit_expr(&self, buffer: &mut impl io::Write, expr: &ExprIR) -> Result<(), Error> {
         match expr {
-            Expr::Value(value) => write!(
-                buffer,
-                "{}",
-                match value {
-                    ExprValue::Integer(v) => v,
-                    ExprValue::Bool(v) =>
-                        if *v {
-                            "true"
-                        } else {
-                            "false"
-                        },
-                    ExprValue::Float(v) => v,
-                    ExprValue::String(v) => v,
-                },
-            )?,
-            // Expr::If(ifexpr) => {}
-            _ => {}
+            ExprIR::Value(value) => write!(buffer, "{}", value)?,
+            // _ => {}
         }
 
         Ok(())

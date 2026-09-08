@@ -1,6 +1,5 @@
 use std::io;
 
-use ast::FnDecl;
 use errors::Error;
 use resolver::{context, defkinds::FnSig, symbols::DefKind};
 use types::{ScopeID, TypeID, defs::TypeDef};
@@ -52,7 +51,6 @@ impl<'a> Codegen<'a> {
 
         writeln!(buffer, "")?;
         buffer.write_all(&definitions)?;
-        writeln!(buffer, "")?;
 
         self.emit_fn_decl(buffer, scopeid)?;
         writeln!(buffer, "")?;
@@ -113,9 +111,24 @@ impl<'a> Codegen<'a> {
         &self,
         buffer: &mut impl io::Write,
         scope: ScopeID,
-        decl: &FnIR,
+        fnir: &FnIR,
     ) -> Result<(), Error> {
-        self.emit_fn_sig(buffer, &decl.sig)?;
+        let fn_sig = self
+            .ctx
+            .table
+            .get_def(fnir.defid)
+            .ok_or_else(|| format!("Def {} does not exists", fnir.defid.0))?
+            .fn_sig()
+            .ok_or_else(|| format!("Def {} is not a function", fnir.defid.0))?;
+
+        self.emit_fn_sig(buffer, &fn_sig)?;
+
+        writeln!(buffer, " {{")?;
+
+        BodyEmitter::new(self.ctx, &fnir).emit(buffer, scope)?;
+
+        writeln!(buffer, "}}\n")?;
+
         Ok(())
     }
 

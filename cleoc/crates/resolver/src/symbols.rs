@@ -40,6 +40,13 @@ impl Definition {
             _ => None,
         }
     }
+
+    pub fn fn_sig(&self) -> Option<&FnSig> {
+        match &self.kind {
+            DefKind::Function(sig) => Some(sig),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]

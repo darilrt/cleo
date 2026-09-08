@@ -5,7 +5,6 @@ pub mod ir;
 mod lower;
 
 pub use lower::lower;
-use parser::extract_tuple;
 
 use std::io;
 
@@ -26,7 +25,7 @@ pub fn generate(
 
     codegen.emit_header(buffer, scope)?;
 
-    for decl in ir.fns() {
+    for fnir in ir.fns() {
         codegen.emit_fn_def(buffer, scope, fnir)?;
     }
 

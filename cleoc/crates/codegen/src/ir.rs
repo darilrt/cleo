@@ -1,4 +1,4 @@
-use types::ScopeID;
+use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug)]
 pub struct UnitIR {
@@ -16,6 +16,10 @@ impl UnitIR {
         }
     }
 
+    pub fn add_fn(&mut self, fnir: FnIR) {
+        self.fns.push(fnir);
+    }
+
     pub fn fns(&self) -> &[FnIR] {
         &self.fns
     }
@@ -28,6 +32,20 @@ impl UnitIR {
 #[derive(Debug)]
 pub struct FnIR {
     pub name: String,
+    pub defid: DefID,
+    pub scope: ScopeID,
+    pub typeid: TypeID,
+    pub body: Vec<StmtIR>,
+}
+
+#[derive(Debug)]
+pub enum StmtIR {
+    Expr(ExprIR),
+}
+
+#[derive(Debug)]
+pub enum ExprIR {
+    Value(String),
 }
 
 #[derive(Debug)]

@@ -1,4 +1,4 @@
-use ast::Ident;
+use ast::{Ident, Operator};
 use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +44,7 @@ pub struct Segment {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub statements: Vec<Stmt>,
+    pub typeid: TypeID,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,11 +73,12 @@ pub enum Binding {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    Value(ExprValue),
+    Value(ast::ExprValue, TypeID),
     BinaryOp {
         left: Box<Expr>,
         op: Operator,
         right: Box<Expr>,
+        typeid: TypeID,
     },
     UnaryOp {
         op: Operator,
@@ -89,6 +91,24 @@ pub enum Expr {
     Assign(ExprAssign),
     If(ExprIf),
     Loop(Block),
+}
+
+impl Expr {
+    pub fn type_id(&self) -> TypeID {
+        match self {
+            Expr::Value(_, typeid) => *typeid,
+            Expr::BinaryOp { left, .. } => left.type_id(),
+            Expr::UnaryOp { expr, .. } => expr.type_id(),
+            Expr::Call(call) => call.expr.type_id(),
+            Expr::Access(access) => access.expr.type_id(),
+            // Expr::Path(path) => path.segments.last().unwrap().name.type_id,
+            // Expr::Init(init) => init.path.segments.last().unwrap().name.type_id,
+            // Expr::Assign(assign) => assign.right.type_id(),
+            // Expr::If(if_expr) => if_expr.then_branch.typeid,
+            // Expr::Loop(block) => block.typeid,
+            _ => unimplemented!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -127,14 +147,6 @@ pub struct ExprIf {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprValue {
-    Integer(String),
-    Float(String),
-    Bool(bool),
-    String(String),
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct ExprAccess {
     pub expr: Box<Expr>,
     pub segment: Segment,
@@ -147,57 +159,12 @@ pub struct ExprCall {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Operator {
-    Add, // +
-    Sub, // -
-    Mul, // *
-    Div, // /
-
-    Deref, // *
-    Ref,   // &
-    Neg,   // -
-    Not,   // !
-
-    Equal,        // ==
-    NotEqual,     // !=
-    Less,         // <
-    Greater,      // >
-    LessEqual,    // <=
-    GreaterEqual, // >=
-
-    And, // &&
-    Or,  // ||
-}
-
-impl Operator {
-    pub fn name(&self) -> &str {
-        match self {
-            Operator::Add => "add",
-            Operator::Div => "divide",
-            Operator::Sub => "subtract",
-            Operator::Mul => "divde",
-            Operator::And
-            | Operator::Greater
-            | Operator::Equal
-            | Operator::Less
-            | Operator::GreaterEqual
-            | Operator::LessEqual
-            | Operator::NotEqual
-            | Operator::Or => "compare",
-            Operator::Deref => "dereference",
-            Operator::Neg => "negate",
-            Operator::Not => "invert",
-            Operator::Ref => "get reference",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct FnDecl {
     pub signature: FnSignature,
     pub block: Block,
     pub scopeid: ScopeID,
     pub typeid: TypeID,
+    pub defid: DefID,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -86,7 +86,7 @@ fn main() {
     }
 
     let unit = check(&mut ctx, root, unit).expect("Check error: ");
-    println!("{:?}", unit);
+    // println!("{:?}", unit);
 
     let mut output = Vec::new();
     if let Err(err) = codegen::generate(&mut ctx, &mut output, root, &unit) {

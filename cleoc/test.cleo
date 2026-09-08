@@ -1,14 +1,8 @@
-type Foo = struct {
-    a: [10]i32
-    b: *const i8
-    c: Boo
-}
-
-type Boo = struct {}
-
-fn add(a: i32, b: i32) i32 {
-}
-
 fn main() {
-    10 + 20
+    10
+    1.2
+    "String"
+    true
+    false
+    20 + 22
 }
