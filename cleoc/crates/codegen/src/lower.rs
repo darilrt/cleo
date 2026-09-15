@@ -34,6 +34,7 @@ pub struct FnLowerer<'a> {
     scope: ScopeID,
     decl: &'a typed_ast::FnDecl,
     body: Vec<StmtIR>,
+    temps: u32,
 }
 
 impl<'a> FnLowerer<'a> {
@@ -42,10 +43,20 @@ impl<'a> FnLowerer<'a> {
             scope,
             decl,
             body: Vec::new(),
+            temps: 0,
         }
     }
 
-    pub fn lower_fn(self) -> Result<FnIR, Error> {
+    pub fn make_temp(&mut self, typeid: TypeID) -> String {
+        let temp_name = format!("tmp{}", self.temps);
+        self.temps += 1;
+
+        self.body.push(StmtIR::Local(temp_name.clone(), typeid));
+
+        temp_name
+    }
+
+    pub fn lower_fn(mut self) -> Result<FnIR, Error> {
         for stmt in &self.decl.block.statements {
             let stmt = self.lower_stmt(stmt)?;
             self.body.push(stmt);
@@ -60,14 +71,14 @@ impl<'a> FnLowerer<'a> {
         })
     }
 
-    fn lower_stmt(&self, stmt: &typed_ast::Stmt) -> Result<StmtIR, Error> {
+    fn lower_stmt(&mut self, stmt: &typed_ast::Stmt) -> Result<StmtIR, Error> {
         match stmt {
             typed_ast::Stmt::Expr(expr) => Ok(StmtIR::Expr(self.lower_expr(expr)?)),
             _ => unimplemented!("stmt"),
         }
     }
 
-    fn lower_expr(&self, expr: &typed_ast::Expr) -> Result<ExprIR, Error> {
+    fn lower_expr(&mut self, expr: &typed_ast::Expr) -> Result<ExprIR, Error> {
         match expr {
             typed_ast::Expr::Value(value, _typeid) => Ok(ExprIR::Value(match value {
                 ExprValue::Bool(b) => b.to_string(),
@@ -86,7 +97,7 @@ impl<'a> FnLowerer<'a> {
     }
 
     fn lower_binary_op(
-        &self,
+        &mut self,
         left: &typed_ast::Expr,
         op: &Operator,
         right: &typed_ast::Expr,
@@ -99,7 +110,12 @@ impl<'a> FnLowerer<'a> {
                 ExprValue::Float(f) => f.to_string(),
                 ExprValue::String(s) => s.clone(),
             },
-            _ => unimplemented!(""),
+            _ => {
+                let temp_name = self.make_temp(typeid);
+                let expr_ir = self.lower_expr(left)?;
+                self.body.push(StmtIR::Assign(temp_name.clone(), expr_ir));
+                temp_name
+            }
         };
 
         let right_str = match right {
@@ -109,7 +125,12 @@ impl<'a> FnLowerer<'a> {
                 ExprValue::Float(f) => f.to_string(),
                 ExprValue::String(s) => s.clone(),
             },
-            _ => unimplemented!(""),
+            _ => {
+                let temp_name = self.make_temp(typeid);
+                let expr_ir = self.lower_expr(right)?;
+                self.body.push(StmtIR::Assign(temp_name.clone(), expr_ir));
+                temp_name
+            }
         };
 
         let op_str = match op {

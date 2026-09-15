@@ -1,7 +1,11 @@
 use std::io;
 
 use errors::Error;
-use resolver::{context, defkinds::FnSig, symbols::DefKind};
+use resolver::{
+    context::{self, Context},
+    defkinds::FnSig,
+    symbols::DefKind,
+};
 use types::{ScopeID, TypeID, defs::TypeDef};
 
 use crate::{bodyemitter::BodyEmitter, ir::FnIR};
@@ -40,7 +44,7 @@ impl<'a> Codegen<'a> {
                     writeln!(definitions, "struct {0} {{", name)?;
                     for (name, typeid) in &def.fields {
                         write!(definitions, "  ")?;
-                        self.emit_type(&mut definitions, *typeid, name)?;
+                        emit_type(self.ctx, &mut definitions, *typeid, name)?;
                         writeln!(definitions, "")?;
                     }
                     writeln!(definitions, "}};\n")?;
@@ -85,7 +89,7 @@ impl<'a> Codegen<'a> {
     }
 
     pub fn emit_fn_sig(&self, buffer: &mut impl io::Write, fnsig: &FnSig) -> Result<(), Error> {
-        self.emit_type(buffer, fnsig.return_type, &fnsig.name)?;
+        emit_type(self.ctx, buffer, fnsig.return_type, &fnsig.name)?;
         write!(buffer, "(")?;
 
         let fntype = match self
@@ -99,7 +103,7 @@ impl<'a> Codegen<'a> {
         };
 
         for (name, typeid) in fnsig.params.iter().zip(&fntype.params) {
-            self.emit_type(buffer, *typeid, name)?;
+            emit_type(self.ctx, buffer, *typeid, name)?;
         }
 
         write!(buffer, ")")?;
@@ -131,52 +135,50 @@ impl<'a> Codegen<'a> {
 
         Ok(())
     }
+}
 
-    pub fn emit_type(
-        &self,
-        buffer: &mut impl io::Write,
-        typeid: TypeID,
-        ident: &str,
-    ) -> Result<(), Error> {
-        let type_def = self
-            .ctx
-            .interner
-            .get(typeid)
-            .ok_or_else(|| format!("Type {} does not exists", typeid.0))?;
+pub fn emit_type<'a>(
+    ctx: &Context,
+    buffer: &mut impl io::Write,
+    typeid: TypeID,
+    ident: &str,
+) -> Result<(), Error> {
+    let type_def = ctx
+        .interner
+        .get(typeid)
+        .ok_or_else(|| format!("Type {} does not exists", typeid.0))?;
 
-        match type_def {
-            TypeDef::Void => write!(buffer, "void {}", ident),
-            TypeDef::Bool => write!(buffer, "bool {}", ident),
-            TypeDef::Int(size, sign) => write!(buffer, "{}{} {}", sign.to_prefix(), size, ident),
-            TypeDef::Float(size) => write!(buffer, "f{} {}", size, ident),
-            TypeDef::Pointer {
-                pointee,
-                mutability,
-            } => {
-                self.emit_type(buffer, *pointee, "")?;
-                if !*mutability {
-                    write!(buffer, "const ")?;
-                }
-                write!(buffer, "* {}", ident)
+    match type_def {
+        TypeDef::Void => write!(buffer, "void {}", ident),
+        TypeDef::Bool => write!(buffer, "bool {}", ident),
+        TypeDef::Int(size, sign) => write!(buffer, "{}{} {}", sign.to_prefix(), size, ident),
+        TypeDef::Float(size) => write!(buffer, "f{} {}", size, ident),
+        TypeDef::Pointer {
+            pointee,
+            mutability,
+        } => {
+            emit_type(ctx, buffer, *pointee, "")?;
+            if !*mutability {
+                write!(buffer, "const ")?;
             }
-            TypeDef::Array { element, size } => {
-                self.emit_type(buffer, *element, ident)?;
-                write!(buffer, "[{}]", size)
-            }
-            TypeDef::FnPointer(_fntype) => {
-                todo!("Function Pointer not implemented yet")
-            }
-            TypeDef::UserDef(defid) => {
-                let def = self
-                    .ctx
-                    .table
-                    .get_def(*defid)
-                    .ok_or_else(|| format!("Def {} does not exists", defid.0))?;
+            write!(buffer, "* {}", ident)
+        }
+        TypeDef::Array { element, size } => {
+            emit_type(ctx, buffer, *element, ident)?;
+            write!(buffer, "[{}]", size)
+        }
+        TypeDef::FnPointer(_fntype) => {
+            todo!("Function Pointer not implemented yet")
+        }
+        TypeDef::UserDef(defid) => {
+            let def = ctx
+                .table
+                .get_def(*defid)
+                .ok_or_else(|| format!("Def {} does not exists", defid.0))?;
 
-                write!(buffer, "{} {}", def.name, ident)
-            }
-        }?;
+            write!(buffer, "{} {}", def.name, ident)
+        }
+    }?;
 
-        Ok(())
-    }
+    Ok(())
 }

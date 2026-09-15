@@ -4,5 +4,5 @@ fn main() {
     "String"
     true
     false
-    20 + 22
+    20 + 20 + (30 * 2)
 }

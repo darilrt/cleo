@@ -4,31 +4,21 @@ use errors::Error;
 use resolver::context::Context;
 use types::ScopeID;
 
-use crate::ir::{ExprIR, FnIR, StmtIR};
+use crate::{
+    codegen::emit_type,
+    ir::{ExprIR, FnIR, StmtIR},
+};
 
 #[allow(unused)]
-pub struct BodyEmitter<'a, 's, 'b> {
+pub struct BodyEmitter<'a, 's> {
     ctx: &'a Context,
     ir: &'s FnIR,
-    temps: u32,
     indent: u32,
-    frames: Vec<Frame<'b>>,
 }
 
-#[allow(unused)]
-struct Frame<'a> {
-    defers: Vec<&'a StmtIR>,
-}
-
-impl<'a, 's, 'b> BodyEmitter<'a, 's, 'b> {
+impl<'a, 's> BodyEmitter<'a, 's> {
     pub fn new(ctx: &'a Context, ir: &'s FnIR) -> Self {
-        Self {
-            ctx,
-            ir,
-            temps: 0,
-            indent: 1,
-            frames: Vec::new(),
-        }
+        Self { ctx, ir, indent: 1 }
     }
 
     pub fn emit(&mut self, buffer: &mut impl io::Write, _scope: ScopeID) -> Result<(), Error> {
@@ -37,6 +27,14 @@ impl<'a, 's, 'b> BodyEmitter<'a, 's, 'b> {
 
             match stmt {
                 StmtIR::Expr(expr) => self.emit_expr(buffer, expr),
+                StmtIR::Local(label, typeid) => {
+                    emit_type(self.ctx, buffer, *typeid, label)?;
+                    Ok(())
+                }
+                StmtIR::Assign(label, expr) => {
+                    write!(buffer, "{} = ", label)?;
+                    self.emit_expr(buffer, expr)
+                }
             }?;
 
             writeln!(buffer, ";")?;
