@@ -1,4 +1,4 @@
-use ast::{Block, Decl, Expr, ExprValue, FnDecl, Operator, Stmt, Unit};
+use ast::{Block, Decl, Expr, ExprIf, ExprValue, FnDecl, Operator, Stmt, Unit};
 use errors::Error;
 use typed_ast::TypedUnit;
 use types::{ScopeID, TypeID, defs::TypeDef};
@@ -273,8 +273,9 @@ impl<'a> Checker<'a> {
             Expr::BinaryOp { left, op, right } => {
                 self.resolve_binaryop(scope, *left, op, *right, block_ctx)
             }
+            Expr::If(expr) => self.resolve_if(scope, expr, block_ctx),
             _ => {
-                unimplemented!()
+                unimplemented!("Expression resolution not implemented for {:?}", expr)
             } // Expr::UnaryOp { op, expr } => self.resolve_unaryop(scope, op, expr, block_ctx),
               // Expr::Path(path) => match self.resolve_pathexpr(scope, path)? {
               //     Resolved::Value(typeid) => Ok(typeid),
@@ -284,7 +285,6 @@ impl<'a> Checker<'a> {
               // Expr::Call(expr) => self.resolve_callexpr(scope, expr, block_ctx),
               // Expr::Assign(expr) => self.resolve_assign(scope, expr, block_ctx),
               // Expr::Access(expr) => self.resolve_access(scope, expr, block_ctx),
-              // Expr::If(expr) => self.resolve_if(scope, expr, block_ctx),
               // Expr::Init(expr) => self.resolve_init(scope, expr, block_ctx),
               // Expr::Loop(block) => self.resolve_loop(scope, block, block_ctx),
         }
@@ -376,6 +376,53 @@ impl<'a> Checker<'a> {
         })
     }
 
+    pub fn resolve_if(
+        &mut self,
+        scope: ScopeID,
+        expr: ExprIf,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Expr, Error> {
+        let condition = self.resolve_expr(scope, *expr.condition, block_ctx)?;
+
+        if !self.ctx.primitives.is_bool(condition.type_id()) {
+            return Err(format!(
+                "expected bool in if condition, found {}",
+                self.ctx.type_name(condition.type_id())
+            )
+            .into());
+        }
+
+        let then_return = {
+            let scope = self.ctx.table.push(scope)?;
+            self.resolve_block_value(scope, expr.then_branch.statements, block_ctx)?
+        };
+
+        let else_return = if let Some(else_branch) = expr.else_branch {
+            let scope = self.ctx.table.push(scope)?;
+            self.resolve_block_value(scope, else_branch.statements, block_ctx)?
+        } else {
+            typed_ast::Block {
+                statements: Vec::new(),
+                typeid: self.ctx.primitives.void,
+            }
+        };
+
+        if then_return.typeid == else_return.typeid {
+            Ok(typed_ast::Expr::If(typed_ast::ExprIf {
+                condition: Box::new(condition),
+                then_branch: then_return,
+                else_branch: Some(else_return),
+            }))
+        } else {
+            Err(format!(
+                "if branches have incompatible types: {} and {}",
+                self.ctx.type_name(then_return.typeid),
+                self.ctx.type_name(else_return.typeid)
+            )
+            .into())
+        }
+    }
+
     /*
         pub fn resolve_init(
         &mut self,
@@ -450,46 +497,6 @@ impl<'a> Checker<'a> {
 
         Ok(typeid)
     }
-
-        pub fn resolve_if(
-            &mut self,
-            scope: ScopeID,
-            expr: &ExprIf,
-            block_ctx: &BlockCtx,
-        ) -> Result<TypeID, Error> {
-            let condition = self.resolve_expr(scope, &expr.condition, block_ctx)?;
-
-            if !self.ctx.primitives.is_bool(condition) {
-                return Err(format!(
-                    "expected bool in if condition, found {}",
-                    self.ctx.type_name(condition)
-                )
-                .into());
-            }
-
-            let then_return = {
-                let scope = self.ctx.table.push(scope)?;
-                self.resolve_block_value(scope, &expr.then_branch.statements, block_ctx)?
-            };
-
-            let else_return = if let Some(else_branch) = &expr.else_branch {
-                let scope = self.ctx.table.push(scope)?;
-                self.resolve_block_value(scope, &else_branch.statements, block_ctx)?
-            } else {
-                self.ctx.primitives.void
-            };
-
-            if then_return == else_return {
-                Ok(then_return)
-            } else {
-                Err(format!(
-                    "if branches have incompatible types: {} and {}",
-                    self.ctx.type_name(then_return),
-                    self.ctx.type_name(else_return)
-                )
-                .into())
-            }
-        }
 
         pub fn resolve_access(
             &mut self,

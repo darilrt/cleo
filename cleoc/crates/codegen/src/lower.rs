@@ -80,18 +80,21 @@ impl<'a> FnLowerer<'a> {
 
     fn lower_expr(&mut self, expr: &typed_ast::Expr) -> Result<ExprIR, Error> {
         match expr {
-            typed_ast::Expr::Value(value, _typeid) => Ok(ExprIR::Value(match value {
-                ExprValue::Bool(b) => b.to_string(),
-                ExprValue::Integer(i) => i.to_string(),
-                ExprValue::Float(f) => f.to_string(),
-                ExprValue::String(s) => s.clone(),
-            })),
+            typed_ast::Expr::Value(value, _typeid) => {
+                Ok(ExprIR::Lit(Box::new(ExprIR::Atom(match value {
+                    ExprValue::Bool(b) => b.to_string(),
+                    ExprValue::Integer(i) => i.to_string(),
+                    ExprValue::Float(f) => f.to_string(),
+                    ExprValue::String(s) => s.clone(),
+                }))))
+            }
             typed_ast::Expr::BinaryOp {
                 left,
                 op,
                 right,
                 typeid,
             } => self.lower_binary_op(left, op, right, *typeid),
+            typed_ast::Expr::If(expr) => self.lower_if(expr),
             _ => unimplemented!("expr"),
         }
     }
@@ -103,35 +106,8 @@ impl<'a> FnLowerer<'a> {
         right: &typed_ast::Expr,
         typeid: TypeID,
     ) -> Result<ExprIR, Error> {
-        let left_str = match left {
-            typed_ast::Expr::Value(value, _typeid) => match value {
-                ExprValue::Bool(b) => b.to_string(),
-                ExprValue::Integer(i) => i.to_string(),
-                ExprValue::Float(f) => f.to_string(),
-                ExprValue::String(s) => s.clone(),
-            },
-            _ => {
-                let temp_name = self.make_temp(typeid);
-                let expr_ir = self.lower_expr(left)?;
-                self.body.push(StmtIR::Assign(temp_name.clone(), expr_ir));
-                temp_name
-            }
-        };
-
-        let right_str = match right {
-            typed_ast::Expr::Value(value, _typeid) => match value {
-                ExprValue::Bool(b) => b.to_string(),
-                ExprValue::Integer(i) => i.to_string(),
-                ExprValue::Float(f) => f.to_string(),
-                ExprValue::String(s) => s.clone(),
-            },
-            _ => {
-                let temp_name = self.make_temp(typeid);
-                let expr_ir = self.lower_expr(right)?;
-                self.body.push(StmtIR::Assign(temp_name.clone(), expr_ir));
-                temp_name
-            }
-        };
+        let left_expr = self.lower_expr(left)?;
+        let right_expr = self.lower_expr(right)?;
 
         let op_str = match op {
             Operator::Add => "+",
@@ -141,10 +117,32 @@ impl<'a> FnLowerer<'a> {
             _ => unimplemented!(""),
         };
 
-        Ok(ExprIR::Value(format!(
-            "{} {} {}",
-            left_str, op_str, right_str
-        )))
+        match (left_expr, right_expr) {
+            (ExprIR::Lit(lhs), ExprIR::Lit(rhs)) => Ok(ExprIR::Lit(Box::new(ExprIR::BinaryOp {
+                left: lhs,
+                op: op_str.to_string(),
+                right: rhs,
+            }))),
+            (left_expr, right_expr) => {
+                let lhs_tmp = self.make_temp(typeid);
+                self.body.push(StmtIR::Assign(lhs_tmp.clone(), left_expr));
+
+                let rhs_tmp = self.make_temp(typeid);
+                self.body.push(StmtIR::Assign(rhs_tmp.clone(), right_expr));
+
+                Ok(ExprIR::BinaryOp {
+                    left: Box::new(ExprIR::Atom(lhs_tmp)),
+                    op: op_str.to_string(),
+                    right: Box::new(ExprIR::Atom(rhs_tmp)),
+                })
+            }
+        }
+    }
+
+    fn lower_if(&mut self, expr: &typed_ast::ExprIf) -> Result<ExprIR, Error> {
+        let condition_expr = self.lower_expr(&expr.condition)?;
+
+        Ok(ExprIR::)
     }
 }
 

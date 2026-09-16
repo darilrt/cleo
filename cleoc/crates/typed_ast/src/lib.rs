@@ -101,10 +101,10 @@ impl Expr {
             Expr::UnaryOp { expr, .. } => expr.type_id(),
             Expr::Call(call) => call.expr.type_id(),
             Expr::Access(access) => access.expr.type_id(),
+            Expr::If(if_expr) => if_expr.then_branch.typeid,
             // Expr::Path(path) => path.segments.last().unwrap().name.type_id,
             // Expr::Init(init) => init.path.segments.last().unwrap().name.type_id,
             // Expr::Assign(assign) => assign.right.type_id(),
-            // Expr::If(if_expr) => if_expr.then_branch.typeid,
             // Expr::Loop(block) => block.typeid,
             _ => unimplemented!(),
         }

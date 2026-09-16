@@ -47,7 +47,13 @@ pub enum StmtIR {
 
 #[derive(Debug)]
 pub enum ExprIR {
-    Value(String),
+    BinaryOp {
+        left: Box<ExprIR>,
+        op: String,
+        right: Box<ExprIR>,
+    },
+    Atom(String),
+    Lit(Box<ExprIR>),
 }
 
 #[derive(Debug)]

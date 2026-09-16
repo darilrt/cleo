@@ -45,8 +45,17 @@ impl<'a, 's> BodyEmitter<'a, 's> {
 
     fn emit_expr(&self, buffer: &mut impl io::Write, expr: &ExprIR) -> Result<(), Error> {
         match expr {
-            ExprIR::Value(value) => write!(buffer, "{}", value)?,
-            // _ => {}
+            ExprIR::Atom(value) => write!(buffer, "{}", value)?,
+            ExprIR::BinaryOp { left, op, right } => {
+                write!(buffer, "(")?;
+                self.emit_expr(buffer, left)?;
+                write!(buffer, " {} ", op)?;
+                self.emit_expr(buffer, right)?;
+                write!(buffer, ")")?;
+            }
+            ExprIR::Lit(expr) => {
+                self.emit_expr(buffer, expr)?;
+            }
         }
 
         Ok(())

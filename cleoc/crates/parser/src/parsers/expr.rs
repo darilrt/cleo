@@ -74,6 +74,8 @@ where
             .delimited_by(just(TokenKind::LeftParen), just(TokenKind::RightParen)))
         .or(struct_init.map(Expr::Init))
         .or(path.clone().map(Expr::Path))
+        .or(if_expr)
+        .or(loop_expr)
         .boxed();
 
         // call := "(", [ expr, { ",", expr }, [ "," ] ], ")"
@@ -236,7 +238,7 @@ where
                 }
             });
 
-        if_expr.or(loop_expr).or(assign).or(logic_or)
+        assign.or(logic_or)
     })
     .boxed()
 }

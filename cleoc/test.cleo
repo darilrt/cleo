@@ -4,5 +4,6 @@ fn main() {
     "String"
     true
     false
-    20 + 20 + (30 * 2)
+    20 + (20 + 30) * 2
+    20 + if true { 0 } else { 1 } + 20
 }
