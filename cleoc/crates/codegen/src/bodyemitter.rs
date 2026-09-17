@@ -2,6 +2,7 @@ use std::io;
 
 use errors::Error;
 use resolver::context::Context;
+use typed_ast::Block;
 use types::ScopeID;
 
 use crate::{
@@ -35,6 +36,9 @@ impl<'a, 's> BodyEmitter<'a, 's> {
                     write!(buffer, "{} = ", label)?;
                     self.emit_expr(buffer, expr)
                 }
+                StmtIR::If(expr, if_block, else_block) => {
+                    self.emit_if(buffer, expr, if_block, else_block.as_ref())
+                }
             }?;
 
             writeln!(buffer, ";")?;
@@ -57,6 +61,20 @@ impl<'a, 's> BodyEmitter<'a, 's> {
                 self.emit_expr(buffer, expr)?;
             }
         }
+
+        Ok(())
+    }
+
+    fn emit_if(
+        &self,
+        buffer: &mut impl io::Write,
+        expr: &ExprIR,
+        _if_block: &Block,
+        _else_block: Option<&Block>,
+    ) -> Result<(), Error> {
+        write!(buffer, "if (")?;
+        self.emit_expr(buffer, expr)?;
+        writeln!(buffer, ") {{ }}")?;
 
         Ok(())
     }

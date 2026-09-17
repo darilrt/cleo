@@ -1,4 +1,4 @@
-use ast::{Expr, ExprValue, Operator};
+use ast::{Expr, ExprValue, Operator, Stmt};
 use errors::Error;
 use typed_ast::TypedUnit;
 use types::{ScopeID, TypeID};
@@ -22,7 +22,7 @@ impl<'a> UnitLowerer<'a> {
 
     pub fn lower_unit(mut self) -> Result<UnitIR, Error> {
         for decl in &self.unit.decls {
-            let fnir = FnLowerer::new(self.scope, decl).lower_fn()?;
+            let fnir = FrameLowerer::new(self.scope, decl, 0).lower_fn()?;
             self.ir.add_fn(fnir);
         }
 
@@ -30,20 +30,20 @@ impl<'a> UnitLowerer<'a> {
     }
 }
 
-pub struct FnLowerer<'a> {
+pub struct FrameLowerer<'a> {
     scope: ScopeID,
     decl: &'a typed_ast::FnDecl,
     body: Vec<StmtIR>,
     temps: u32,
 }
 
-impl<'a> FnLowerer<'a> {
-    pub fn new(scope: ScopeID, decl: &'a typed_ast::FnDecl) -> Self {
+impl<'a> FrameLowerer<'a> {
+    pub fn new(scope: ScopeID, decl: &'a typed_ast::FnDecl, temps: u32) -> Self {
         Self {
             scope,
             decl,
             body: Vec::new(),
-            temps: 0,
+            temps,
         }
     }
 
@@ -71,6 +71,15 @@ impl<'a> FnLowerer<'a> {
         })
     }
 
+    pub fn lower_block(mut self) -> Result<BlockIR, Error> {
+        for stmt in &self.decl.block.statements {
+            let stmt = self.lower_stmt(stmt)?;
+            self.body.push(stmt);
+        }
+
+        Ok(BlockIR { body: self.body })
+    }
+
     fn lower_stmt(&mut self, stmt: &typed_ast::Stmt) -> Result<StmtIR, Error> {
         match stmt {
             typed_ast::Stmt::Expr(expr) => Ok(StmtIR::Expr(self.lower_expr(expr)?)),
@@ -80,14 +89,12 @@ impl<'a> FnLowerer<'a> {
 
     fn lower_expr(&mut self, expr: &typed_ast::Expr) -> Result<ExprIR, Error> {
         match expr {
-            typed_ast::Expr::Value(value, _typeid) => {
-                Ok(ExprIR::Lit(Box::new(ExprIR::Atom(match value {
-                    ExprValue::Bool(b) => b.to_string(),
-                    ExprValue::Integer(i) => i.to_string(),
-                    ExprValue::Float(f) => f.to_string(),
-                    ExprValue::String(s) => s.clone(),
-                }))))
-            }
+            typed_ast::Expr::Value(value, _typeid) => Ok(ExprIR::Atom(match value {
+                ExprValue::Bool(b) => b.to_string(),
+                ExprValue::Integer(i) => i.to_string(),
+                ExprValue::Float(f) => f.to_string(),
+                ExprValue::String(s) => s.clone(),
+            })),
             typed_ast::Expr::BinaryOp {
                 left,
                 op,
@@ -104,7 +111,7 @@ impl<'a> FnLowerer<'a> {
         left: &typed_ast::Expr,
         op: &Operator,
         right: &typed_ast::Expr,
-        typeid: TypeID,
+        _typeid: TypeID,
     ) -> Result<ExprIR, Error> {
         let left_expr = self.lower_expr(left)?;
         let right_expr = self.lower_expr(right)?;
@@ -117,32 +124,24 @@ impl<'a> FnLowerer<'a> {
             _ => unimplemented!(""),
         };
 
-        match (left_expr, right_expr) {
-            (ExprIR::Lit(lhs), ExprIR::Lit(rhs)) => Ok(ExprIR::Lit(Box::new(ExprIR::BinaryOp {
-                left: lhs,
-                op: op_str.to_string(),
-                right: rhs,
-            }))),
-            (left_expr, right_expr) => {
-                let lhs_tmp = self.make_temp(typeid);
-                self.body.push(StmtIR::Assign(lhs_tmp.clone(), left_expr));
-
-                let rhs_tmp = self.make_temp(typeid);
-                self.body.push(StmtIR::Assign(rhs_tmp.clone(), right_expr));
-
-                Ok(ExprIR::BinaryOp {
-                    left: Box::new(ExprIR::Atom(lhs_tmp)),
-                    op: op_str.to_string(),
-                    right: Box::new(ExprIR::Atom(rhs_tmp)),
-                })
-            }
-        }
+        Ok(ExprIR::BinaryOp {
+            left: Box::new(left_expr),
+            op: op_str.to_string(),
+            right: Box::new(right_expr),
+        })
     }
 
     fn lower_if(&mut self, expr: &typed_ast::ExprIf) -> Result<ExprIR, Error> {
         let condition_expr = self.lower_expr(&expr.condition)?;
+        let tmp = self.make_temp(expr.then_branch.typeid);
 
-        Ok(ExprIR::)
+        self.body.push(StmtIR::If(
+            condition_expr,
+            expr.then_branch.clone(),
+            expr.else_branch.clone(),
+        ));
+
+        Ok(ExprIR::Atom(tmp))
     }
 }
 

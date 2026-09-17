@@ -1,3 +1,4 @@
+use typed_ast::Block;
 use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug)]
@@ -43,6 +44,7 @@ pub enum StmtIR {
     Expr(ExprIR),
     Local(String, TypeID),
     Assign(String, ExprIR),
+    If(ExprIR, Block, Option<Block>),
 }
 
 #[derive(Debug)]
@@ -57,4 +59,6 @@ pub enum ExprIR {
 }
 
 #[derive(Debug)]
-pub struct GenType {}
+pub struct BlockIR {
+    pub stmts: Vec<StmtIR>,
+}
