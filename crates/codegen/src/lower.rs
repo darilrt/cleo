@@ -1,4 +1,4 @@
-use ast::{Expr, ExprValue, Operator, Stmt};
+use ast::{ExprValue, Operator};
 use errors::Error;
 use typed_ast::TypedUnit;
 use types::{ScopeID, TypeID};

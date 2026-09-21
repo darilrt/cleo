@@ -1,0 +1,551 @@
+// ═══════════════════════════════════════════════════════════════
+//  Full showcase — every language feature
+//  Target: C (monomorphized, zero cost)
+// ═══════════════════════════════════════════════════════════════
+
+
+import std.io
+import std.mem
+import std.math
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Enums: C-like, integer tags only
+// ═══════════════════════════════════════════════════════════════
+
+type Status = enum {
+    Ok
+    Full
+    NotFound
+}
+
+type Ordering = enum { 
+	Less
+	Equal
+	Greater
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Unions: tagged unions, variants carry data
+// ═══════════════════════════════════════════════════════════════
+
+type Result[T] = union {
+    ok:  T
+    err: *const u8
+}
+
+type Token = union {
+    integer: i64
+    float:   f64
+    ident:   *const u8
+    eof
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Requires: structural contracts, monomorphized
+//  They guarantee interface, NOT layout.
+// ═══════════════════════════════════════════════════════════════
+
+type Describable = require {
+    fn describe(self: *const Self) *const u8
+}
+
+type Comparable = require {
+    fn cmp(self: *const Self, other: *const Self) Ordering
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Structs
+// ═══════════════════════════════════════════════════════════════
+
+type Vec2 = struct {
+    x: f64
+    y: f64
+}
+
+type Sensor = struct {
+    id:      u32
+    label:   *const u8
+    pos:     Vec2
+    reading: f64
+    active:  bool
+}
+
+type Motor = struct {
+    name: *const u8
+    rpm:  u32
+    temp: f64
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Type aliases
+// ═══════════════════════════════════════════════════════════════
+
+type SensorBuffer = [64]*const Sensor
+type TransformFn = fn(f64) f64
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Generic struct with require bound
+// ═══════════════════════════════════════════════════════════════
+
+type Pool[T: Describable] = struct {
+    buf:  *T
+    len:  usize
+    cap:  usize
+    name: *const u8
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Memory access: pointer arithmetic
+//  There is no a[i]. You build your own functions.
+// ═══════════════════════════════════════════════════════════════
+
+fn get[T](ptr: *T, index: usize) *T {
+    return ptr + index
+}
+
+fn get_const[T](ptr: *const T, index: usize) *const T {
+    return ptr + index
+}
+
+fn at[T](ptr: *T, index: usize, len: usize) Result[*T] {
+    if index >= len {
+        return { err = "index out of bounds" }
+    }
+    return { ok = ptr + index }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Functions: plain, generic, methods
+// ═══════════════════════════════════════════════════════════════
+
+fn square(x: f64) f64 {
+    return x * x
+}
+
+fn vec2_length(v: *const Vec2) f64 {
+    return math.sqrt(v.x * v.x + v.y * v.y)
+}
+
+fn vec2_distance(a: *const Vec2, b: *const Vec2) f64 {
+    dx: const = a.x - b.x
+    dy: const = a.y - b.y
+    return math.sqrt(dx * dx + dy * dy)
+}
+
+fn vec2_negate(v: *Vec2) {
+    v.x = -v.x
+    v.y = -v.y
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Methods (self param) — they satisfy requires
+// ═══════════════════════════════════════════════════════════════
+
+// Sensor satisfies Describable
+fn describe(self: *const Sensor) *const u8 {
+    return self.label
+}
+
+// Motor also satisfies Describable
+fn describe(self: *const Motor) *const u8 {
+    return self.name
+}
+
+// Sensor satisfies Comparable
+fn cmp(self: *const Sensor, other: *const Sensor) Ordering {
+    if self.reading < other.reading { return Ordering.Less }
+    if self.reading > other.reading { return Ordering.Greater }
+    return Ordering.Equal
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Pool: generic methods
+// ═══════════════════════════════════════════════════════════════
+
+fn push[T: Describable](self: *Pool[T], item: T) Status {
+    if self.len >= self.cap {
+        return Status.Full
+    }
+    slot := get[T](self.buf, self.len)
+    *slot = item
+    self.len += 1
+    return Status.Ok
+}
+
+fn pop[T: Describable](self: *Pool[T]) Result[T] {
+    if self.len == 0 {
+        return { err = "pool empty" }
+    }
+    self.len -= 1
+    item: const = *get[T](self.buf, self.len)
+    return { ok = item }
+}
+
+fn clear[T: Describable](self: *Pool[T]) {
+    self.len = 0
+}
+
+fn is_full[T: Describable](self: *const Pool[T]) bool {
+    return self.len >= self.cap
+}
+
+fn find[T: Describable](
+    self: *const Pool[T],
+    predicate: fn(item: *const T) bool,
+) Result[*const T] {
+    i := 0
+    loop {
+        if i >= self.len {
+            return { err = "not found" }
+        }
+        item: const = get_const[T](self.buf, i)
+        if predicate(item) {
+            return { ok = item }
+        }
+        i += 1
+    }
+}
+
+fn count_where[T: Describable](
+    self: *const Pool[T],
+    predicate: fn(item: *const T) bool,
+) usize {
+    n := 0
+    i := 0
+    loop {
+        if i >= self.len { break }
+        item: const = get_const[T](self.buf, i)
+        if predicate(item) { n += 1 }
+        i += 1
+    }
+    return n
+}
+
+fn transform[T: Describable](
+    self: *Pool[T],
+    f: fn(item: *T),
+) {
+    i := 0
+    loop {
+        if i >= self.len { break }
+        f(get[T](self.buf, i))
+        i += 1
+    }
+}
+
+fn dump[T: Describable](self: *const Pool[T]) {
+    io.print("Pool '")
+    io.print(self.name)
+    io.print("' (")
+    io.print_usize(self.len)
+    io.print("/")
+    io.print_usize(self.cap)
+    io.println("):")
+    i := 0
+    loop {
+        if i >= self.len { break }
+        item: const = *get_const[T](self.buf, i)
+        io.print("  [")
+        io.print_usize(i)
+        io.print("] ")
+        io.println(item.describe())
+        i += 1
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Generic function with anonymous inline require
+// ═══════════════════════════════════════════════════════════════
+
+fn max_by[T: require {
+    fn cmp(self: *const Self, other: *const Self) Ordering
+}](a: *const T, b: *const T) *const T {
+    result: const = a.cmp(b)
+    if result == Ordering.Less {
+        return b
+    }
+    return a
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  Every expression
+// ═══════════════════════════════════════════════════════════════
+
+fn demonstrate_expressions() {
+    // ── primaries ────────────────────────────────────────────
+    count: const i32 = 42
+    pi: const        = 3.14159
+    greeting: const  = "hello world"
+    flag: const      = true
+
+    // ── grouping ─────────────────────────────────────────────
+    grouped: const = (count + 8) * 2
+
+    // ── logic ────────────────────────────────────────────────
+    check: const = flag && count > 0 || !flag
+
+    // ── comparisons ──────────────────────────────────────────
+    eq: const  = count == 42
+    neq: const = count != 0
+    lt: const  = pi < 4.0
+    gt: const  = pi > 3.0
+    lte: const = count <= 100
+    gte: const = count >= 1
+
+    // ── assignments ──────────────────────────────────────────
+    acc := 0
+    acc  = 10
+    acc += 5
+    acc -= 3
+    acc *= 2
+    acc /= 4
+
+    // ── if as expression ─────────────────────────────────────
+    label: const = if acc > 5 { "high" } else { "low" }
+
+    // ── block as expression ──────────────────────────────────
+    hypotenuse: const = {
+        a: const = 3.0
+        b: const = 4.0
+        math.sqrt(a * a + b * b)
+    }
+
+    // ── loop as expression + break with value ────────────────
+    i := 0
+    first_big: const = loop {
+        if i * i > 50 { break i }
+        i += 1
+    }
+
+    // ── anonymous function: a function pointer, nothing more ─
+    double := fn(x: i32) i32 { return x * 2 }
+    result: const = double(21)
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  main
+// ═══════════════════════════════════════════════════════════════
+
+fn main() {
+    // ── allocation + defer ───────────────────────────────────
+    sensor_buf := mem.alloc(Sensor, 32)
+    defer mem.free(sensor_buf)
+
+    motor_buf := mem.alloc(Motor, 16)
+    defer mem.free(motor_buf)
+
+
+    // ── struct init: { field = value } ───────────────────────
+    // Type inferred from context. No type name. No dot prefix.
+    origin: const Vec2 = { x = 0.0, y = 0.0 }
+
+    s1: const = Sensor{
+        id      = 1
+        label   = "temp"
+        pos     = { x = 10.5, y = -3.2 }
+        reading = 23.5
+        active  = true
+    }
+
+    s2: const = Sensor{
+        id      = 2
+        label   = "humidity"
+        pos     = origin
+        reading = 61.0
+        active  = false
+    }
+
+    s3: const = Sensor{
+        id      = 3
+        label   = "pressure"
+        pos     = { x = 0.0, y = 7.1 }
+        reading = 1013.25
+        active  = true
+    }
+
+    m1: const = Motor{
+        name = "servo-A"
+        rpm  = 3000
+        temp = 45.0
+    }
+
+
+    // ── Pool[Sensor] ────────────────────────────────────────
+    sensor_pool: Pool[Sensor] = {
+        buf  = sensor_buf
+        len  = 0
+        cap  = 32
+        name = "sensors-floor-3"
+    }
+    defer sensor_pool.clear()
+
+    sensor_pool.push(s1)
+    sensor_pool.push(s2)
+    sensor_pool.push(s3)
+
+
+    // ── Pool[Motor] — same code, different type ──────────────
+    motor_pool: Pool[Motor] = {
+        buf  = motor_buf
+        len  = 0
+        cap  = 16
+        name = "motors-line-1"
+    }
+    defer motor_pool.clear()
+
+    motor_pool.push(m1)
+    motor_pool.push({ name = "servo-B", rpm = 1500, temp = 38.0 })
+
+
+    // ── dump: direct dispatch, no vtable ─────────────────────
+    sensor_pool.dump()
+    motor_pool.dump()
+
+
+    // ── anonymous functions as arguments ─────────────────────
+    active_count: const = sensor_pool.count_where(
+        fn(s: *const Sensor) bool { return s.active }
+    )
+    io.print("Active: ")
+    io.print_usize(active_count)
+
+    hot_motors: const = motor_pool.count_where(
+        fn(m: *const Motor) bool { return m.temp > 40.0 }
+    )
+
+
+    // ── transform with anonymous function ────────────────────
+    sensor_pool.transform(fn(s: *Sensor) {
+        s.reading = s.reading * 1.05
+    })
+
+
+    // ── find returns Result[*const T] (tagged union) ─────────
+    result: const = sensor_pool.find(
+        fn(s: *const Sensor) bool { return s.reading > 60.0 }
+    )
+
+
+    // ── raw pointer arithmetic ───────────────────────────────
+    first: const = *(sensor_pool.buf + 0)
+    io.println(first.label)
+
+    // ── at() with bounds check ───────────────────────────────
+    checked: const = at[Sensor](sensor_pool.buf, 99, sensor_pool.len)
+
+
+    // ── if / else ────────────────────────────────────────────
+    if sensor_pool.is_full() {
+        io.println("pool full")
+    } else {
+        io.println("space available")
+    }
+
+
+    // ── max_by with anonymous require ────────────────────────
+    // Sensor satisfies Comparable → monomorphizes max_by__Sensor
+    best: const = max_by[Sensor](&s1, &s3)
+    io.print("Highest reading: ")
+    io.println(best.describe())
+
+
+    // ── & address-of, field access through pointer ───────────
+    pool_ptr: const = &sensor_pool
+    io.print("Name via pointer: ")
+    io.println(pool_ptr.name)
+
+
+    // ── pop returns tagged union ─────────────────────────────
+    popped: const = sensor_pool.pop()
+
+
+    // ── anonymous struct ─────────────────────────────────────
+    // No type declaration. The type IS its shape.
+    config := { max_retries = 3, timeout_ms = 5000, verbose = false }
+    io.print_usize(config.timeout_ms)
+
+
+    // ── anonymous function stored in a variable ──────────────
+    calibrate: const TransformFn = fn(r: f64) f64 {
+        return r * 0.98 + 0.5
+    }
+
+    sensor_pool.transform(fn(s: *Sensor) {
+        s.reading = calibrate(s.reading)
+    })
+
+
+    // ── loop with continue and break ─────────────────────────
+    i := 0
+    total := 0.0
+    loop {
+        if i >= sensor_pool.len { break }
+
+        sensor: const = *get_const[Sensor](sensor_pool.buf, i)
+
+        if !sensor.active {
+            i += 1
+            continue
+        }
+
+        total += sensor.reading
+        i += 1
+    }
+    io.print("Total active readings: ")
+    io.print_f64(total)
+
+
+    // ── loop as expression ───────────────────────────────────
+    j := 0
+    first_hot: const = loop {
+        if j >= sensor_pool.len { break -1.0 }
+        sensor: const = *get_const[Sensor](sensor_pool.buf, j)
+        if sensor.reading > 100.0 { break sensor.reading }
+        j += 1
+    }
+
+
+    // ── block as expression ──────────────────────────────────
+    avg: const = {
+        sum := 0.0
+        k := 0
+        loop {
+            if k >= sensor_pool.len { break }
+            sum += (*get_const[Sensor](sensor_pool.buf, k)).reading
+            k += 1
+        }
+        if sensor_pool.len > 0 { sum / sensor_pool.len } else { 0.0 }
+    }
+
+
+    // ── distance between sensors using Vec2 ──────────────────
+    dist: const = vec2_distance(&s1.pos, &s3.pos)
+    io.print("Distance s1-s3: ")
+    io.print_f64(dist)
+
+
+    // ── negate a vector (unary - through function) ───────────
+    vel := Vec2{ x = 5.0, y = -3.0 }
+    vec2_negate(&vel)
+
+
+    // On leaving main, defers fire in reverse order:
+    //   1. sensor_pool.transform (calibrate) — already ran
+    //   2. motor_pool.clear()
+    //   3. sensor_pool.clear()
+    //   4. mem.free(motor_buf)
+    //   5. mem.free(sensor_buf)
+}
