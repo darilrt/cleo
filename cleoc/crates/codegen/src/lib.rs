@@ -1,4 +1,4 @@
-pub mod bodyemitter;
+pub mod blockemitter;
 pub mod codegen;
 pub mod ir;
 
@@ -17,9 +17,9 @@ pub fn generate(
     ctx: &context::Context,
     buffer: &mut impl io::Write,
     scope: ScopeID,
-    unit: &TypedUnit,
+    unit: TypedUnit,
 ) -> Result<(), Error> {
-    let ir = lower(scope, unit)?;
+    let ir = lower(unit)?;
 
     let codegen = codegen::Codegen::new(ctx);
 

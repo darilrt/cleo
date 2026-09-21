@@ -1,28 +1,22 @@
-use ast::{Expr, ExprValue, Operator, Stmt};
+use ast::{ExprValue, Operator};
 use errors::Error;
 use typed_ast::TypedUnit;
-use types::{ScopeID, TypeID};
+use types::TypeID;
 
-use crate::ir::{ExprIR, FnIR, StmtIR, UnitIR};
+use crate::ir::{BlockIR, ExprIR, FnIR, StmtIR, UnitIR};
 
-pub struct UnitLowerer<'a> {
-    scope: ScopeID,
-    unit: &'a TypedUnit,
+pub struct UnitLowerer {
     ir: UnitIR,
 }
 
-impl<'a> UnitLowerer<'a> {
-    pub fn new(scope: ScopeID, unit: &'a TypedUnit) -> Self {
-        Self {
-            scope,
-            unit,
-            ir: UnitIR::new(scope),
-        }
+impl UnitLowerer {
+    pub fn new() -> Self {
+        Self { ir: UnitIR::new() }
     }
 
-    pub fn lower_unit(mut self) -> Result<UnitIR, Error> {
-        for decl in &self.unit.decls {
-            let fnir = FrameLowerer::new(self.scope, decl, 0).lower_fn()?;
+    pub fn lower_unit(mut self, unit: TypedUnit) -> Result<UnitIR, Error> {
+        for decl in unit.decls {
+            let fnir = FrameLowerer::lower_fn(decl, 0)?;
             self.ir.add_fn(fnir);
         }
 
@@ -30,19 +24,15 @@ impl<'a> UnitLowerer<'a> {
     }
 }
 
-pub struct FrameLowerer<'a> {
-    scope: ScopeID,
-    decl: &'a typed_ast::FnDecl,
-    body: Vec<StmtIR>,
+pub struct FrameLowerer {
+    stmts: Vec<StmtIR>,
     temps: u32,
 }
 
-impl<'a> FrameLowerer<'a> {
-    pub fn new(scope: ScopeID, decl: &'a typed_ast::FnDecl, temps: u32) -> Self {
+impl FrameLowerer {
+    fn new(temps: u32) -> Self {
         Self {
-            scope,
-            decl,
-            body: Vec::new(),
+            stmts: Vec::new(),
             temps,
         }
     }
@@ -51,43 +41,70 @@ impl<'a> FrameLowerer<'a> {
         let temp_name = format!("tmp{}", self.temps);
         self.temps += 1;
 
-        self.body.push(StmtIR::Local(temp_name.clone(), typeid));
+        self.stmts.push(StmtIR::Local(temp_name.clone(), typeid));
 
         temp_name
     }
 
-    pub fn lower_fn(mut self) -> Result<FnIR, Error> {
-        for stmt in &self.decl.block.statements {
-            let stmt = self.lower_stmt(stmt)?;
-            self.body.push(stmt);
-        }
+    pub fn lower_fn(fndecl: typed_ast::FnDecl, temps: u32) -> Result<FnIR, Error> {
+        let (_, block) = FrameLowerer::lower_block(fndecl.block, None, temps)?;
 
         Ok(FnIR {
-            name: self.decl.signature.name.string(),
-            defid: self.decl.defid,
-            scope: self.decl.scopeid,
-            typeid: self.decl.typeid,
-            body: self.body,
+            name: fndecl.signature.name.string(),
+            defid: fndecl.defid,
+            scope: fndecl.scopeid,
+            typeid: fndecl.typeid,
+            block,
         })
     }
 
-    pub fn lower_block(mut self) -> Result<BlockIR, Error> {
-        for stmt in &self.decl.block.statements {
-            let stmt = self.lower_stmt(stmt)?;
-            self.body.push(stmt);
+    pub fn lower_block(
+        block: typed_ast::Block,
+        ret_var: Option<String>,
+        temps: u32,
+    ) -> Result<(u32, BlockIR), Error> {
+        let mut lowerer = FrameLowerer::new(temps);
+        let mut stmts = block.statements;
+
+        let Some(last) = stmts.pop() else {
+            return Ok((lowerer.temps, BlockIR { stmts: Vec::new() }));
+        };
+
+        for stmt in stmts {
+            let stmt = lowerer.lower_stmt(stmt)?;
+            lowerer.stmts.push(stmt);
         }
 
-        Ok(BlockIR { body: self.body })
+        match ret_var {
+            Some(var) => match last {
+                typed_ast::Stmt::Expr(expr) => {
+                    let expr_ir = lowerer.lower_expr(expr)?;
+                    lowerer.stmts.push(StmtIR::Assign(var, expr_ir));
+                }
+                _ => unimplemented!("stmt"),
+            },
+            None => {
+                let stmt = lowerer.lower_stmt(last)?;
+                lowerer.stmts.push(stmt);
+            }
+        }
+
+        Ok((
+            lowerer.temps,
+            BlockIR {
+                stmts: lowerer.stmts,
+            },
+        ))
     }
 
-    fn lower_stmt(&mut self, stmt: &typed_ast::Stmt) -> Result<StmtIR, Error> {
+    fn lower_stmt(&mut self, stmt: typed_ast::Stmt) -> Result<StmtIR, Error> {
         match stmt {
             typed_ast::Stmt::Expr(expr) => Ok(StmtIR::Expr(self.lower_expr(expr)?)),
             _ => unimplemented!("stmt"),
         }
     }
 
-    fn lower_expr(&mut self, expr: &typed_ast::Expr) -> Result<ExprIR, Error> {
+    fn lower_expr(&mut self, expr: typed_ast::Expr) -> Result<ExprIR, Error> {
         match expr {
             typed_ast::Expr::Value(value, _typeid) => Ok(ExprIR::Atom(match value {
                 ExprValue::Bool(b) => b.to_string(),
@@ -100,7 +117,7 @@ impl<'a> FrameLowerer<'a> {
                 op,
                 right,
                 typeid,
-            } => self.lower_binary_op(left, op, right, *typeid),
+            } => self.lower_binary_op(*left, op, *right, typeid),
             typed_ast::Expr::If(expr) => self.lower_if(expr),
             _ => unimplemented!("expr"),
         }
@@ -108,9 +125,9 @@ impl<'a> FrameLowerer<'a> {
 
     fn lower_binary_op(
         &mut self,
-        left: &typed_ast::Expr,
-        op: &Operator,
-        right: &typed_ast::Expr,
+        left: typed_ast::Expr,
+        op: Operator,
+        right: typed_ast::Expr,
         _typeid: TypeID,
     ) -> Result<ExprIR, Error> {
         let left_expr = self.lower_expr(left)?;
@@ -131,22 +148,32 @@ impl<'a> FrameLowerer<'a> {
         })
     }
 
-    fn lower_if(&mut self, expr: &typed_ast::ExprIf) -> Result<ExprIR, Error> {
-        let condition_expr = self.lower_expr(&expr.condition)?;
-        let tmp = self.make_temp(expr.then_branch.typeid);
+    fn lower_if(&mut self, expr: typed_ast::ExprIf) -> Result<ExprIR, Error> {
+        let condition_expr = self.lower_expr(*expr.condition)?;
+        let tmp: String = self.make_temp(expr.then_branch.typeid);
 
-        self.body.push(StmtIR::If(
-            condition_expr,
-            expr.then_branch.clone(),
-            expr.else_branch.clone(),
-        ));
+        let (temps, if_block) =
+            FrameLowerer::lower_block(expr.then_branch, Some(tmp.clone()), self.temps)?;
+
+        let else_block = expr
+            .else_branch
+            .and_then(|branch| FrameLowerer::lower_block(branch, Some(tmp.clone()), temps).ok())
+            .map(|(temps, block)| {
+                self.temps = temps;
+                block
+            });
+
+        self.temps = temps;
+
+        self.stmts
+            .push(StmtIR::If(condition_expr, if_block, else_block));
 
         Ok(ExprIR::Atom(tmp))
     }
 }
 
-pub fn lower(scope: ScopeID, unit: &TypedUnit) -> Result<UnitIR, Error> {
-    let lowerer = UnitLowerer::new(scope, unit);
+pub fn lower(unit: TypedUnit) -> Result<UnitIR, Error> {
+    let lowerer = UnitLowerer::new();
 
-    lowerer.lower_unit()
+    lowerer.lower_unit(unit)
 }

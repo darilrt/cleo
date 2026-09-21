@@ -1,7 +1,7 @@
 fn main() {
-    if true {
+    if false {
         0
     } else {
         1
-    }
+    } + if (true) { 1 } else { 2}
 }

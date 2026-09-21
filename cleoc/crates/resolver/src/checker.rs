@@ -143,27 +143,24 @@ impl<'a> Checker<'a> {
     pub fn resolve_block_value(
         &mut self,
         scope: ScopeID,
-        mut stmts: Vec<Stmt>,
+        stmts: Vec<Stmt>,
         block_ctx: &BlockCtx,
     ) -> Result<typed_ast::Block, Error> {
-        let Some(last) = stmts.pop() else {
+        let statements = stmts
+            .into_iter()
+            .map(|stmt| self.resolve_stmt(scope, stmt, block_ctx))
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        let Some(last) = statements.last() else {
             return Ok(typed_ast::Block {
                 statements: Vec::new(),
                 typeid: self.ctx.primitives.void,
             });
         };
 
-        let statements = stmts
-            .into_iter()
-            .map(|stmt| self.resolve_stmt(scope, stmt, block_ctx))
-            .collect::<Result<Vec<_>, Error>>()?;
-
         let typeid = match last {
-            Stmt::Expr(expr) => self.resolve_expr(scope, expr, block_ctx)?.type_id(),
-            _ => {
-                self.resolve_stmt(scope, last, block_ctx)?;
-                self.ctx.primitives.void
-            }
+            typed_ast::Stmt::Expr(expr) => expr.type_id(),
+            _ => self.ctx.primitives.void,
         };
 
         Ok(typed_ast::Block { statements, typeid })

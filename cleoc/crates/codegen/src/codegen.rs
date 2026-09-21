@@ -8,7 +8,7 @@ use resolver::{
 };
 use types::{ScopeID, TypeID, defs::TypeDef};
 
-use crate::{bodyemitter::BodyEmitter, ir::FnIR};
+use crate::{blockemitter::BlockEmitter, ir::FnIR};
 
 pub struct Codegen<'a> {
     ctx: &'a context::Context,
@@ -30,6 +30,7 @@ impl<'a> Codegen<'a> {
 
         let mut definitions: Vec<u8> = Vec::new();
 
+        let mut any_def = false;
         for (name, defid) in scope.symbols().iter() {
             let def = self
                 .ctx
@@ -39,6 +40,7 @@ impl<'a> Codegen<'a> {
 
             match &def.kind {
                 DefKind::Struct(def) => {
+                    any_def = true;
                     writeln!(buffer, "typedef struct {0} {0};", name)?;
 
                     writeln!(definitions, "struct {0} {{", name)?;
@@ -53,8 +55,10 @@ impl<'a> Codegen<'a> {
             }
         }
 
-        writeln!(buffer, "")?;
-        buffer.write_all(&definitions)?;
+        if any_def {
+            writeln!(buffer, "")?;
+            buffer.write_all(&definitions)?;
+        }
 
         self.emit_fn_decl(buffer, scopeid)?;
         writeln!(buffer, "")?;
@@ -128,9 +132,7 @@ impl<'a> Codegen<'a> {
         self.emit_fn_sig(buffer, &fn_sig)?;
 
         writeln!(buffer, " {{")?;
-
-        BodyEmitter::new(self.ctx, &fnir).emit(buffer, scope)?;
-
+        BlockEmitter::new(self.ctx, &fnir.block.stmts, 1).emit(buffer, scope)?;
         writeln!(buffer, "}}\n")?;
 
         Ok(())

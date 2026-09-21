@@ -2,46 +2,48 @@ use std::io;
 
 use errors::Error;
 use resolver::context::Context;
-use typed_ast::Block;
 use types::ScopeID;
 
 use crate::{
     codegen::emit_type,
-    ir::{ExprIR, FnIR, StmtIR},
+    ir::{BlockIR, ExprIR, StmtIR},
 };
 
 #[allow(unused)]
-pub struct BodyEmitter<'a, 's> {
+pub struct BlockEmitter<'a, 's> {
     ctx: &'a Context,
-    ir: &'s FnIR,
+    ir: &'s Vec<StmtIR>,
     indent: u32,
 }
 
-impl<'a, 's> BodyEmitter<'a, 's> {
-    pub fn new(ctx: &'a Context, ir: &'s FnIR) -> Self {
-        Self { ctx, ir, indent: 1 }
+impl<'a, 's> BlockEmitter<'a, 's> {
+    pub fn new(ctx: &'a Context, ir: &'s Vec<StmtIR>, indent: u32) -> Self {
+        Self { ctx, ir, indent }
     }
 
     pub fn emit(&mut self, buffer: &mut impl io::Write, _scope: ScopeID) -> Result<(), Error> {
-        for stmt in self.ir.body.iter() {
+        for stmt in self.ir.iter() {
             emit_identation(buffer, self.indent)?;
 
             match stmt {
-                StmtIR::Expr(expr) => self.emit_expr(buffer, expr),
+                StmtIR::Expr(expr) => {
+                    self.emit_expr(buffer, expr)?;
+                    writeln!(buffer, ";")
+                }
                 StmtIR::Local(label, typeid) => {
                     emit_type(self.ctx, buffer, *typeid, label)?;
-                    Ok(())
+                    writeln!(buffer, ";")
                 }
                 StmtIR::Assign(label, expr) => {
                     write!(buffer, "{} = ", label)?;
-                    self.emit_expr(buffer, expr)
+                    self.emit_expr(buffer, expr)?;
+                    writeln!(buffer, ";")
                 }
                 StmtIR::If(expr, if_block, else_block) => {
-                    self.emit_if(buffer, expr, if_block, else_block.as_ref())
+                    self.emit_if(buffer, expr, if_block, else_block.as_ref())?;
+                    writeln!(buffer, "")
                 }
             }?;
-
-            writeln!(buffer, ";")?;
         }
 
         Ok(())
@@ -57,9 +59,6 @@ impl<'a, 's> BodyEmitter<'a, 's> {
                 self.emit_expr(buffer, right)?;
                 write!(buffer, ")")?;
             }
-            ExprIR::Lit(expr) => {
-                self.emit_expr(buffer, expr)?;
-            }
         }
 
         Ok(())
@@ -69,12 +68,23 @@ impl<'a, 's> BodyEmitter<'a, 's> {
         &self,
         buffer: &mut impl io::Write,
         expr: &ExprIR,
-        _if_block: &Block,
-        _else_block: Option<&Block>,
+        if_block: &BlockIR,
+        else_block: Option<&BlockIR>,
     ) -> Result<(), Error> {
         write!(buffer, "if (")?;
         self.emit_expr(buffer, expr)?;
-        writeln!(buffer, ") {{ }}")?;
+        writeln!(buffer, ") {{")?;
+        BlockEmitter::new(self.ctx, &if_block.stmts, self.indent + 1).emit(buffer, ScopeID(0))?;
+        emit_identation(buffer, self.indent)?;
+        writeln!(buffer, "}}")?;
+
+        if let Some(block) = else_block {
+            emit_identation(buffer, self.indent)?;
+            writeln!(buffer, "else {{")?;
+            BlockEmitter::new(self.ctx, &block.stmts, self.indent + 1).emit(buffer, ScopeID(0))?;
+            emit_identation(buffer, self.indent)?;
+            write!(buffer, "}}")?;
+        };
 
         Ok(())
     }
