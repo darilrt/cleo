@@ -1,0 +1,7 @@
+import ki.intrinsics.reinterpret
+
+@extern("C")
+@name("free")
+fn __free(ptr: *c.void)
+
+fn free[T](ptr: *T) { __free(reinterpret[*c.void](ptr)) }

@@ -1,0 +1,13 @@
+import ki.intrinsics.reinterpret
+
+@extern("C")
+@name("__builtin_memset")
+fn __memset(dst: *c.void, val: c.int, len: usize)
+
+fn zero[T](ptr: *T, count: usize) {
+    __memset(
+        reinterpret[*c.void](ptr),
+        0,
+        sizeof[T]() * count,
+    )
+}

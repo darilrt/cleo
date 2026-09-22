@@ -1,0 +1,6 @@
+
+type Opt[T] = union {
+    Est: T
+    Non
+}
+

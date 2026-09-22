@@ -1,0 +1,126 @@
+import c
+import ki.intrinsics.reinterpret
+import ki.intrinsics.sizeof
+import std.err.panic
+import std.opt.Opt
+
+type Vec[T] = struct {
+    data: *T
+    len: usize
+    cap: usize
+}
+
+fn new[T](Vec[T]) Self {
+    return {
+        data = reinterpret[*T](0),
+        len = 0,
+        cap = 0,
+    }
+}
+
+fn with_cap[T](Vec[T], cap: usize) Self {
+    return {
+        data = if cap > 0 { c.malloc[T](cap) } else { reinterpret[*T](0) },
+        len = 0,
+        cap = cap,
+    }
+}
+
+fn free[T](self: *Vec[T]) {
+    if self.cap > 0 {
+        c.free(self.data)
+    }
+    self.data = reinterpret[*T](0)
+    self.len = 0
+    self.cap = 0
+}
+
+fn reserve[T](self: *Vec[T], new_cap: usize) {
+    if self.cap >= new_cap { return }
+
+    new_ptr := c.malloc[T](new_cap)
+    if self.len > 0 {
+        c.memcpy(new_ptr, self.data, self.len * sizeof[T]())
+    }
+    if self.cap > 0 {
+        c.free(self.data)
+    }
+    self.data = new_ptr
+    self.cap = new_cap
+}
+
+fn shrink[T](self: *Vec[T]) {
+    if self.len == self.cap { return }
+    if self.len == 0 {
+        self.free()
+        return
+    }
+
+    new_ptr := c.malloc[T](self.len)
+    c.memcpy(new_ptr, self.data, self.len * sizeof[T]())
+    c.free(self.data)
+    self.data = new_ptr
+    self.cap = self.len
+}
+
+fn push[T](self: *Vec[T], item: T) {
+    if self.len == self.cap {
+        self.reserve(if self.cap == 0 { 1 } else { self.cap * 2 })
+    }
+    *(self.data + self.len) = item
+    self.len += 1
+}
+
+fn pop[T](self: *Vec[T]) Opt[T] {
+    if self.len == 0 { return { Non } }
+    self.len -= 1
+    return { Est = *(self.data + self.len) }
+}
+
+fn at[T](self: *const Vec[T], index: usize) T {
+    if index >= self.len { panic("index out of range") }
+    return *(self.data + index)
+}
+
+fn try_at[T](self: *const Vec[T], index: usize) Opt[T] {
+    if index >= self.len { return { Non } }
+    return { Est = *(self.data + index) }
+}
+
+fn set[T](self: *Vec[T], index: usize, item: T) {
+    if index >= self.len { panic("index out of range") }
+    *(self.data + index) = item
+}
+
+fn first[T](self: *const Vec[T]) Opt[T] {
+    if self.len == 0 { return { Non } }
+    return { Est = *(self.data + 0) }
+}
+
+fn last[T](self: *const Vec[T]) Opt[T] {
+    if self.len == 0 { return { Non } }
+    return { Est = *(self.data + self.len - 1) }
+}
+
+fn ptr_at[T](self: *Vec[T], index: usize) *T {
+    if index >= self.len { panic("index out of range") }
+    return self.data + index
+}
+
+fn is_empty[T](self: *const Vec[T]) bool {
+    return self.len == 0
+}
+
+fn clear[T](self: *Vec[T]) {
+    self.len = 0
+}
+
+fn find[T](self: *const Vec[T], predicate: fn(*const T) bool) Opt[*const T] {
+    i := 0
+    loop {
+        if i >= self.len { { Non } }
+        ptr: const = self.data + i
+        if predicate(ptr) { { Est = ptr } }
+        i += 1
+    }
+}

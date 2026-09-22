@@ -1,8 +1,13 @@
+//  Conventions:
+//      B.as[T]() -> casting
+//      B.to[T]() -> new object
+//      B.from(T) -> initialize from data
+//      B.free() -> free internal memory
+
 // ═══════════════════════════════════════════════════════════════
 //  Full showcase — every language feature
 //  Target: C (monomorphized, zero cost)
 // ═══════════════════════════════════════════════════════════════
-
 
 import std.io
 import std.mem
@@ -353,42 +358,42 @@ fn main() {
     origin: const Vec2 = { x = 0.0, y = 0.0 }
 
     s1: const = Sensor{
-        id      = 1
-        label   = "temp"
-        pos     = { x = 10.5, y = -3.2 }
-        reading = 23.5
-        active  = true
+        id      = 1,
+        label   = "temp",
+        pos     = { x = 10.5, y = -3.2 },
+        reading = 23.5,
+        active  = true,
     }
 
     s2: const = Sensor{
-        id      = 2
-        label   = "humidity"
-        pos     = origin
-        reading = 61.0
-        active  = false
+        id      = 2,
+        label   = "humidity",
+        pos     = origin,
+        reading = 61.0,
+        active  = false,
     }
 
     s3: const = Sensor{
-        id      = 3
-        label   = "pressure"
-        pos     = { x = 0.0, y = 7.1 }
-        reading = 1013.25
-        active  = true
+        id      = 3,
+        label   = "pressure",
+        pos     = { x = 0.0, y = 7.1 },
+        reading = 1013.25,
+        active  = true,
     }
 
     m1: const = Motor{
-        name = "servo-A"
-        rpm  = 3000
+        name = "servo-A",
+        rpm  = 3000,
         temp = 45.0
     }
 
 
     // ── Pool[Sensor] ────────────────────────────────────────
     sensor_pool: Pool[Sensor] = {
-        buf  = sensor_buf
-        len  = 0
-        cap  = 32
-        name = "sensors-floor-3"
+        buf  = sensor_buf,
+        len  = 0,
+        cap  = 32,
+        name = "sensors-floor-3",
     }
     defer sensor_pool.clear()
 
@@ -399,10 +404,10 @@ fn main() {
 
     // ── Pool[Motor] — same code, different type ──────────────
     motor_pool: Pool[Motor] = {
-        buf  = motor_buf
-        len  = 0
-        cap  = 16
-        name = "motors-line-1"
+        buf  = motor_buf,
+        len  = 0,
+        cap  = 16,
+        name = "motors-line-1",
     }
     defer motor_pool.clear()
 
@@ -423,7 +428,7 @@ fn main() {
     io.print_usize(active_count)
 
     hot_motors: const = motor_pool.count_where(
-        fn(m: *const Motor) bool { return m.temp > 40.0 }
+        fn(m: *const Motor) bool { m.temp > 40.0 }
     )
 
 
@@ -435,7 +440,7 @@ fn main() {
 
     // ── find returns Result[*const T] (tagged union) ─────────
     result: const = sensor_pool.find(
-        fn(s: *const Sensor) bool { return s.reading > 60.0 }
+        fn(s: *const Sensor) bool { s.reading > 60.0 }
     )
 
 
@@ -479,11 +484,12 @@ fn main() {
 
 
     // ── anonymous function stored in a variable ──────────────
-    calibrate: const TransformFn = fn(r: f64) f64 {
-        return r * 0.98 + 0.5
-    }
 
     sensor_pool.transform(fn(s: *Sensor) {
+        calibrate: const TransformFn = fn(r: f64) f64 {
+            return r * 0.98 + 0.5
+        }
+
         s.reading = calibrate(s.reading)
     })
 

@@ -1,0 +1,13 @@
+import ki.intrinsics.reinterpret
+
+@extern("C")
+@name("__builtin_memcpy")
+fn __memcpy(dst: *c.void, src: *const c.void, len: usize)
+
+fn memcpy[T](dst: *T, src: *const T, len: usize) {
+    __memcpy(
+        reinterpret[*c.void](dst),
+        reinterpret[*const c.void](src),
+        len,
+    )
+}

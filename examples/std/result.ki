@@ -1,0 +1,69 @@
+import std.err.panic
+
+type Result[T, E] = union {
+    Ok: T
+    Err: E
+}
+
+fn is_ok[T, E](self: Result[T, E]) bool {
+    match self {
+        { Ok = _ } -> true
+        { Err = _ } -> false
+    }
+}
+
+fn is_err[T, E](self: Result[T, E]) bool {
+    match self {
+        { Ok = _ } -> false 
+        { Err = _ } -> true 
+    }
+}
+
+fn value[T, E](self: Result[T, E]) T {
+    match self {
+        { Ok = v } -> v
+        { Err = _ } -> panic("called value() on an Err result")
+    }
+}
+
+fn error[T, E](self: Result[T, E]) E {
+    match self {
+        { Ok = _ } -> panic("called error() on an Ok result")
+        { Err = e } -> e
+    }
+}
+
+fn bind[T, E, U](self: Result[T, E], f: fn(T) Result[U, E]) Result[U, E] {
+    match self {
+        { Ok = v } -> f(v)
+        { Err = e } -> { Err = e }
+    }
+}
+
+fn map[T, E, U](self: Result[T, E], f: fn(T) U) Result[U, E] {
+    match self {
+        { Ok = v } -> { Ok = f(v) }
+        { Err = e } -> { Err = e }
+    }
+}
+
+fn value_or[T, E](self: Result[T, E], default: T) T {
+    match self {
+        { Ok = v }  -> v
+        { Err = _ } -> default
+    }
+}
+
+fn error_or[T, E](self: Result[T, E], default: E) E {
+    match self {
+        { Ok = _ }  -> default
+        { Err = e } -> e
+    }
+}
+
+fn value_or_else[T, E](self: Result[T, E], f: fn(E) T) T {
+    match self {
+        { Ok = v }  -> v
+        { Err = e } -> f(e)
+    }
+}

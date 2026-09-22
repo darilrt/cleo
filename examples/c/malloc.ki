@@ -1,0 +1,18 @@
+import c.intrinsics.sizeof
+import c.intrinsics.reinterpret
+import std.opt
+
+@extern("C")
+@name("malloc")
+fn __malloc(len: usize)
+
+fn malloc[T](len: usize) Opt[*T] { 
+    ptr := __malloc(len * sizeof[T]())
+
+    if ptr == 0 {
+        { Non }
+    }
+    else {
+        { Est = reinterpret[*T](ptr) }
+    }
+}
