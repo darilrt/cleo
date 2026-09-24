@@ -59,7 +59,7 @@ pub enum Stmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Local {
-    pub name: Ident,
+    pub name: String,
     pub typeid: TypeID,
     pub initializer: Option<Expr>,
 }

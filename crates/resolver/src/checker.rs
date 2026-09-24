@@ -400,31 +400,34 @@ impl<'a> Checker<'a> {
         local: Local,
         block_ctx: &BlockCtx,
     ) -> Result<typed_ast::Local, Error> {
-        //     let var_type = self.ctx.resolve_id(
-        //         scope,
-        //         local
-        //             .var_type
-        //             .as_ref()
-        //             .unwrap_or_else(|| todo!("Implemente Infered types")),
-        //     )?;
+        let typeid = self.ctx.resolve_id(
+            scope,
+            local
+                .var_type
+                .as_ref()
+                .unwrap_or_else(|| todo!("Implemente Infered types")),
+        )?;
 
-        //     if let Some(expr) = local.initializer.as_ref() {
-        //         let expr_type = self.resolve_expr(scope, expr.as_ref(), block_ctx)?;
+        let expr = local.initializer.map(|expr| {
+            let expr = self.resolve_expr(scope, *expr, block_ctx)?;
+            let exprid = expr.type_id();
 
-        //         if !self.ctx.is_coercible(expr_type, var_type) {
-        //             return Err(format!(
-        //                 "expected {}, found {}",
-        //                 self.ctx.type_name(var_type),
-        //                 self.ctx.type_name(expr_type)
-        //             )
-        //             .into());
-        //         }
-        //     }
+            if !self.ctx.is_coercible(exprid, typeid) {
+                return Err(Error::from(format!(
+                    "expected {}, found {}",
+                    self.ctx.type_name(typeid),
+                    self.ctx.type_name(exprid)
+                )));
+            }
 
-        //     self.ctx
-        //         .table
-        //         .define(scope, Definition::var(local.name.str(), var_type))?;
-        todo!();
+            Ok(expr)
+        }).transpose()?;
+
+        let _ = self.ctx
+            .table
+            .define(scope, Definition::var(local.name.str(), typeid))?;
+        
+        Ok(typed_ast::Local { name: local.name.string(), typeid, initializer: expr })
     }
 
     /*

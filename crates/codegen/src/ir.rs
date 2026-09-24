@@ -31,7 +31,7 @@ pub struct FnIR {
 #[derive(Debug)]
 pub enum StmtIR {
     Expr(ExprIR),
-    Local(String, TypeID),
+    Local(String, TypeID, Option<ExprIR>),
     Assign(String, ExprIR),
     If(ExprIR, BlockIR, Option<BlockIR>),
 }

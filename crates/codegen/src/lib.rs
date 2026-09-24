@@ -19,7 +19,7 @@ pub fn generate(
     scope: ScopeID,
     unit: TypedUnit,
 ) -> Result<(), Error> {
-    let ir = lower(unit)?;
+    let ir = lower(unit, ctx)?;
 
     let codegen = codegen::Codegen::new(ctx);
 

@@ -30,8 +30,12 @@ impl<'a, 's> BlockEmitter<'a, 's> {
                     self.emit_expr(buffer, expr)?;
                     writeln!(buffer, ";")
                 }
-                StmtIR::Local(label, typeid) => {
-                    emit_type(self.ctx, buffer, *typeid, label)?;
+                StmtIR::Local(name, typeid, expr) => {
+                    emit_type(self.ctx, buffer, *typeid, name)?;
+                    if let Some(expr) = expr {
+                        write!(buffer, " = ")?;
+                        self.emit_expr(buffer, expr)?;
+                    };
                     writeln!(buffer, ";")
                 }
                 StmtIR::Assign(label, expr) => {

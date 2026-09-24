@@ -1,22 +1,24 @@
 use ast::{ExprValue, Operator};
 use errors::Error;
+use resolver::context;
 use typed_ast::TypedUnit;
-use types::TypeID;
+use types::{ TypeID};
 
 use crate::ir::{BlockIR, ExprIR, FnIR, StmtIR, UnitIR};
 
-pub struct UnitLowerer {
+pub struct UnitLowerer<'a> {
     ir: UnitIR,
+    ctx: &'a context::Context,
 }
 
-impl UnitLowerer {
-    pub fn new() -> Self {
-        Self { ir: UnitIR::new() }
+impl<'a> UnitLowerer<'a> {
+    pub fn new(ctx: &'a context::Context) -> Self {
+        Self { ir: UnitIR::new(), ctx }
     }
 
     pub fn lower_unit(mut self, unit: TypedUnit) -> Result<UnitIR, Error> {
         for decl in unit.decls {
-            let fnir = FrameLowerer::lower_fn(decl, 0)?;
+            let fnir = FrameLowerer::lower_fn(decl, 0, self.ctx)?;
             self.ir.add_fn(fnir);
         }
 
@@ -24,16 +26,18 @@ impl UnitLowerer {
     }
 }
 
-pub struct FrameLowerer {
+pub struct FrameLowerer<'a> {
     stmts: Vec<StmtIR>,
     temps: u32,
+    ctx: &'a context::Context,
 }
 
-impl FrameLowerer {
-    fn new(temps: u32) -> Self {
+impl<'a> FrameLowerer<'a> {
+    fn new(temps: u32, ctx: &'a context::Context) -> Self {
         Self {
             stmts: Vec::new(),
             temps,
+            ctx,
         }
     }
 
@@ -41,13 +45,13 @@ impl FrameLowerer {
         let temp_name = format!("tmp{}", self.temps);
         self.temps += 1;
 
-        self.stmts.push(StmtIR::Local(temp_name.clone(), typeid));
+        self.stmts.push(StmtIR::Local(temp_name.clone(), typeid, None));
 
         temp_name
     }
 
-    pub fn lower_fn(fndecl: typed_ast::FnDecl, temps: u32) -> Result<FnIR, Error> {
-        let (_, block) = FrameLowerer::lower_block(fndecl.block, None, temps)?;
+    pub fn lower_fn(fndecl: typed_ast::FnDecl, temps: u32, ctx: &context::Context) -> Result<FnIR, Error> {
+        let (_, block) = FrameLowerer::lower_block(fndecl.block, None, temps, ctx)?;
 
         Ok(FnIR {
             name: fndecl.signature.name.string(),
@@ -62,8 +66,9 @@ impl FrameLowerer {
         block: typed_ast::Block,
         ret_var: Option<String>,
         temps: u32,
+        ctx: &context::Context,
     ) -> Result<(u32, BlockIR), Error> {
-        let mut lowerer = FrameLowerer::new(temps);
+        let mut lowerer = FrameLowerer::new(temps, ctx);
         let mut stmts = block.statements;
 
         let Some(last) = stmts.pop() else {
@@ -100,8 +105,19 @@ impl FrameLowerer {
     fn lower_stmt(&mut self, stmt: typed_ast::Stmt) -> Result<StmtIR, Error> {
         match stmt {
             typed_ast::Stmt::Expr(expr) => Ok(StmtIR::Expr(self.lower_expr(expr)?)),
+            typed_ast::Stmt::Local(local) => Ok(self.lower_local(local)?),
             _ => unimplemented!("stmt"),
         }
+    }
+
+    fn lower_local(&mut self, local: typed_ast::Local) -> Result<StmtIR, Error> {
+        let initializer = if let Some(expr) = local.initializer {
+            Some(self.lower_expr(expr)?)
+        } else {
+            None
+        };
+
+        Ok(StmtIR::Local(local.name, local.typeid, initializer))
     }
 
     fn lower_expr(&mut self, expr: typed_ast::Expr) -> Result<ExprIR, Error> {
@@ -153,11 +169,11 @@ impl FrameLowerer {
         let tmp: String = self.make_temp(expr.then_branch.typeid);
 
         let (temps, if_block) =
-            FrameLowerer::lower_block(expr.then_branch, Some(tmp.clone()), self.temps)?;
+            FrameLowerer::lower_block(expr.then_branch, Some(tmp.clone()), self.temps, self.ctx)?;
 
         let else_block = expr
             .else_branch
-            .and_then(|branch| FrameLowerer::lower_block(branch, Some(tmp.clone()), temps).ok())
+            .and_then(|branch| FrameLowerer::lower_block(branch, Some(tmp.clone()), temps, self.ctx).ok())
             .map(|(temps, block)| {
                 self.temps = temps;
                 block
@@ -172,8 +188,8 @@ impl FrameLowerer {
     }
 }
 
-pub fn lower(unit: TypedUnit) -> Result<UnitIR, Error> {
-    let lowerer = UnitLowerer::new();
+pub fn lower(unit: TypedUnit, ctx: &context::Context) -> Result<UnitIR, Error> {
+    let lowerer = UnitLowerer::new(ctx);
 
     lowerer.lower_unit(unit)
 }
