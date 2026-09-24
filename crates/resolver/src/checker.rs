@@ -1,4 +1,4 @@
-use ast::{Block, Decl, Expr, ExprIf, ExprValue, FnDecl, Operator, Stmt, Unit};
+use ast::{Block, Decl, Expr, ExprIf, ExprValue, FnDecl, Local, Operator, Stmt, Unit};
 use errors::Error;
 use typed_ast::TypedUnit;
 use types::{ScopeID, TypeID, defs::TypeDef};
@@ -209,40 +209,14 @@ impl<'a> Checker<'a> {
             //     }
             //     (None, None) => {}
             // },
-            // Stmt::Local(local) => {
-            //     let var_type = self.ctx.resolve_id(
-            //         scope,
-            //         local
-            //             .var_type
-            //             .as_ref()
-            //             .unwrap_or_else(|| todo!("Implemente Infered types")),
-            //     )?;
-
-            //     if let Some(expr) = local.initializer.as_ref() {
-            //         let expr_type = self.resolve_expr(scope, expr.as_ref(), block_ctx)?;
-
-            //         if !self.ctx.is_coercible(expr_type, var_type) {
-            //             return Err(format!(
-            //                 "expected {}, found {}",
-            //                 self.ctx.type_name(var_type),
-            //                 self.ctx.type_name(expr_type)
-            //             )
-            //             .into());
-            //         }
-            //     }
-
-            //     self.ctx
-            //         .table
-            //         .define(scope, Definition::var(local.name.str(), var_type))?;
-            // }
-            // Stmt::Expr(expr) => {
-            //     self.resolve_expr(scope, expr, block_ctx)?;
-            // }
             // Stmt::Defer(expr) => {
             //     self.resolve_expr(scope, expr, block_ctx)?;
             // }
             Stmt::Expr(expr) => Ok(typed_ast::Stmt::Expr(
                 self.resolve_expr(scope, expr, block_ctx)?,
+            )),
+            Stmt::Local(local) => Ok(typed_ast::Stmt::Local(
+                self.resolve_local(scope, local, block_ctx)?,
             )),
             _ => unimplemented!("Statement resolution not implemented for {:?}", stmt),
         }
@@ -418,6 +392,39 @@ impl<'a> Checker<'a> {
             )
             .into())
         }
+    }
+
+    pub fn resolve_local(
+        &mut self,
+        scope: ScopeID,
+        local: Local,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Local, Error> {
+        //     let var_type = self.ctx.resolve_id(
+        //         scope,
+        //         local
+        //             .var_type
+        //             .as_ref()
+        //             .unwrap_or_else(|| todo!("Implemente Infered types")),
+        //     )?;
+
+        //     if let Some(expr) = local.initializer.as_ref() {
+        //         let expr_type = self.resolve_expr(scope, expr.as_ref(), block_ctx)?;
+
+        //         if !self.ctx.is_coercible(expr_type, var_type) {
+        //             return Err(format!(
+        //                 "expected {}, found {}",
+        //                 self.ctx.type_name(var_type),
+        //                 self.ctx.type_name(expr_type)
+        //             )
+        //             .into());
+        //         }
+        //     }
+
+        //     self.ctx
+        //         .table
+        //         .define(scope, Definition::var(local.name.str(), var_type))?;
+        todo!();
     }
 
     /*

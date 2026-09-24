@@ -59,10 +59,9 @@ pub enum Stmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Local {
-    pub binding: Binding,
     pub name: Ident,
-    pub var_type: Option<Type>,
-    pub initializer: Option<Box<Expr>>,
+    pub typeid: TypeID,
+    pub initializer: Option<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
