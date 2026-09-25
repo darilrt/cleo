@@ -1,4 +1,4 @@
-use ast::{Ident, Operator};
+use ast::{AssignKind, Ident, Operator};
 use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,15 +115,6 @@ pub struct ExprAssign {
     pub left: Box<Expr>,
     pub kind: AssignKind,
     pub right: Box<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AssignKind {
-    Equal,    // =
-    AddEqual, // +=
-    SubEqual, // -=
-    MulEqual, // *=
-    DivEqual, // /=
 }
 
 #[derive(Debug, Clone, PartialEq)]

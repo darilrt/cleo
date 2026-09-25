@@ -1,10 +1,15 @@
-use ast::{Block, Decl, Expr, ExprIf, ExprValue, FnDecl, Local, Operator, Stmt, Unit};
+use std::fmt::Alignment::Right;
+
+use ast::{
+    Block, Decl, Expr, ExprAssign, ExprIf, ExprValue, FnDecl, Local, Operator, PathExpr, Stmt, Unit,
+};
 use errors::Error;
 use typed_ast::TypedUnit;
-use types::{ScopeID, TypeID, defs::TypeDef};
+use types::{DefID, ScopeID, TypeID, defs::TypeDef};
 
 use crate::{
     context::Context,
+    resolver::Resolved,
     symbols::{DefKind, Definition},
 };
 
@@ -245,15 +250,16 @@ impl<'a> Checker<'a> {
                 self.resolve_binaryop(scope, *left, op, *right, block_ctx)
             }
             Expr::If(expr) => self.resolve_if(scope, expr, block_ctx),
+            Expr::Assign(expr) => self.resolve_assign(scope, expr, block_ctx),
+            Expr::Path(path) => match self.resolve_pathexpr(scope, path)? {
+                Resolved::Value(typeid) => Ok(typeid),
+                Resolved::EnumValue(typeid) => Ok(typeid),
+                _ => Err(format!("Expected value, found {:?} in path expression", path).into()),
+            },
             _ => {
                 unimplemented!("Expression resolution not implemented for {:?}", expr)
             } // Expr::UnaryOp { op, expr } => self.resolve_unaryop(scope, op, expr, block_ctx),
-              // Expr::Path(path) => match self.resolve_pathexpr(scope, path)? {
-              //     Resolved::Value(typeid) => Ok(typeid),
-              //     Resolved::EnumValue(typeid) => Ok(typeid),
-              //     _ => Err(format!("Expected value, found {:?} in path expression", path).into()),
-              // },
-              // Expr::Call(expr) => self.resolve_callexpr(scope, expr, block_ctx),
+              //   Expr::Call(expr) => self.resolve_callexpr(scope, expr, block_ctx),
               // Expr::Assign(expr) => self.resolve_assign(scope, expr, block_ctx),
               // Expr::Access(expr) => self.resolve_access(scope, expr, block_ctx),
               // Expr::Init(expr) => self.resolve_init(scope, expr, block_ctx),
@@ -408,26 +414,222 @@ impl<'a> Checker<'a> {
                 .unwrap_or_else(|| todo!("Implemente Infered types")),
         )?;
 
-        let expr = local.initializer.map(|expr| {
-            let expr = self.resolve_expr(scope, *expr, block_ctx)?;
-            let exprid = expr.type_id();
+        let expr = local
+            .initializer
+            .map(|expr| {
+                let expr = self.resolve_expr(scope, *expr, block_ctx)?;
+                let exprid = expr.type_id();
 
-            if !self.ctx.is_coercible(exprid, typeid) {
-                return Err(Error::from(format!(
-                    "expected {}, found {}",
-                    self.ctx.type_name(typeid),
-                    self.ctx.type_name(exprid)
-                )));
-            }
+                if !self.ctx.is_coercible(exprid, typeid) {
+                    return Err(Error::from(format!(
+                        "expected {}, found {}",
+                        self.ctx.type_name(typeid),
+                        self.ctx.type_name(exprid)
+                    )));
+                }
 
-            Ok(expr)
-        }).transpose()?;
+                Ok(expr)
+            })
+            .transpose()?;
 
-        let _ = self.ctx
+        let _ = self
+            .ctx
             .table
             .define(scope, Definition::var(local.name.str(), typeid))?;
-        
-        Ok(typed_ast::Local { name: local.name.string(), typeid, initializer: expr })
+
+        Ok(typed_ast::Local {
+            name: local.name.string(),
+            typeid,
+            initializer: expr,
+        })
+    }
+
+    pub fn resolve_assign(
+        &mut self,
+        scope: ScopeID,
+        expr: ExprAssign,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Expr, Error> {
+        if !self.is_lvalue(&*expr.left) {
+            return Err("invalid left-hand side of assignment".to_string().into());
+        }
+
+        let left = self.resolve_expr(scope, *expr.left, block_ctx)?;
+        let right = self.resolve_expr(scope, *expr.right, block_ctx)?;
+
+        if !self.ctx.is_coercible(right.type_id(), left.type_id()) {
+            return Err(format!(
+                "expected {}, found {}",
+                self.ctx.type_name(left.type_id()),
+                self.ctx.type_name(right.type_id())
+            )
+            .into());
+        }
+
+        Ok(typed_ast::Expr::Assign(typed_ast::ExprAssign {
+            left: Box::new(left),
+            kind: expr.kind,
+            right: Box::new(right),
+        }))
+    }
+
+    pub fn is_lvalue(&mut self, expr: &Expr) -> bool {
+        match expr {
+            Expr::UnaryOp {
+                op: Operator::Deref,
+                ..
+            }
+            | Expr::Path(_)
+            | Expr::Access(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn resolve_pathexpr(&mut self, scope: ScopeID, path: &PathExpr) -> Result<Resolved, Error> {
+        // TODO: Revisar esta implementacion para resolver PathExpressions y devovler un TypedUnit
+        let mut it = path.segments.iter();
+        let first = it
+            .next()
+            .ok_or_else(|| "expected at least 1 segment in PathExpr".to_string())?;
+
+        let defid = self
+            .ctx
+            .table
+            .lookup(scope, first.name.str())
+            .ok_or_else(|| format!("'{}' not defined", first.name.str()))?;
+        let def = self
+            .ctx
+            .table
+            .get_def(defid)
+            .ok_or_else(|| format!("unknown definition '{}'", first.name.str()))?;
+
+        let mut current = self.def_to_resolved(def, defid);
+
+        for seg in it {
+            current = self.resolve_next(current, seg.name.str())?;
+        }
+
+        Ok(current)
+    }
+
+    pub fn resolve_next(&mut self, current: Resolved, name: &str) -> Result<Resolved, Error> {
+        match current {
+            Resolved::Module(scope) => {
+                let def_id = self.ctx.table.lookup(scope, name).ok_or_else(|| {
+                    format!(
+                        "Cannot resolve member '{}' in module at scope {:?}",
+                        name, scope
+                    )
+                })?;
+                let def = self.ctx.table.get_def(def_id).ok_or_else(|| {
+                    format!(
+                        "Cannot resolve member '{}' in module at scope {:?}",
+                        name, scope
+                    )
+                })?;
+                Ok(self.def_to_resolved(def, def_id))
+            }
+            Resolved::Value(ty) => {
+                let field_ty = self.resolve_field_or_method(ty, name)?;
+                Ok(Resolved::Value(field_ty))
+            }
+            Resolved::Type(typeid, def_id) => {
+                let def = self.ctx.table.get_def(def_id).unwrap();
+                match &def.kind {
+                    DefKind::Enum(enum_def) => {
+                        if enum_def.values.contains(&name.to_string()) {
+                            Ok(Resolved::EnumValue(typeid))
+                        } else {
+                            Err(format!("enum '{}' has no value '{}'", def.name, name).into())
+                        }
+                    }
+                    DefKind::Struct(_) => Err(format!(
+                        "cannot access '{}' on type '{}', use an instance",
+                        name, def.name
+                    )
+                    .into()),
+                    DefKind::Trait(_) => {
+                        Err(format!("cannot access '{}' on trait '{}'", name, def.name).into())
+                    }
+                    _ => Err(format!("cannot access '{}' on '{}'", name, def.name).into()),
+                }
+            }
+            Resolved::EnumValue(_typeid) => {
+                Err(format!("cannot access '{}' on enum variant, use an instance", name).into())
+            }
+        }
+    }
+
+    /// This method asume the typeid a type of an instanced value, not a type
+    /// So it returns a value type of ar instance methods
+    pub fn resolve_field_or_method(&mut self, typeid: TypeID, name: &str) -> Result<TypeID, Error> {
+        let mut typeid = typeid;
+        loop {
+            match self.ctx.interner.get(typeid) {
+                Some(TypeDef::Pointer { pointee, .. }) => typeid = *pointee,
+                _ => break,
+            }
+        }
+
+        if let Some(method) = self.ctx.methods.lookup(name, typeid) {
+            let def = self
+                .ctx
+                .table
+                .get_def(method)
+                .ok_or_else(|| "internal: method DefID not found".to_string())?;
+
+            match &def.kind {
+                DefKind::Function(fnsig) => Ok(fnsig.typeid),
+                _ => unreachable!("MethodTable contains non-function DefID"),
+            }
+        } else if let Some(instance) = self.ctx.interner.get(typeid) {
+            match instance {
+                TypeDef::UserDef(defid) => {
+                    let Some(def) = self.ctx.table.get_def(*defid) else {
+                        unreachable!("defid not exists");
+                    };
+
+                    match &def.kind {
+                        DefKind::Struct(def) => def.get_field(name).ok_or_else(|| {
+                            {
+                                format!(
+                                    "no field \"{}\" on type {}",
+                                    name,
+                                    self.ctx.type_name(typeid)
+                                )
+                            }
+                            .into()
+                        }),
+                        _ => Err(format!(
+                            "no field \"{}\" on type {}",
+                            name,
+                            self.ctx.type_name(typeid)
+                        )
+                        .into()),
+                    }
+                }
+                _ => Err(format!(
+                    "no field \"{}\" on type {}",
+                    name,
+                    self.ctx.type_name(typeid)
+                )
+                .into()),
+            }
+        } else {
+            unreachable!("TypeID {} not found in interner", typeid.0)
+        }
+    }
+
+    fn def_to_resolved(&self, def: &Definition, defid: DefID) -> Resolved {
+        match &def.kind {
+            DefKind::Variable { typeid } => Resolved::Value(*typeid),
+            DefKind::Function(sig) => Resolved::Value(sig.typeid),
+            DefKind::Struct(s) => Resolved::Type(s.typeid, defid),
+            DefKind::Enum(e) => Resolved::Type(e.typeid, defid),
+            DefKind::Trait(t) => Resolved::Type(t.typeid, defid),
+            DefKind::TypeAlias(a) => Resolved::Type(a.typeid, defid),
+            DefKind::Module { scope } => Resolved::Module(*scope),
+        }
     }
 
     /*
@@ -516,43 +718,6 @@ impl<'a> Checker<'a> {
             match self.resolve_next(base, expr.segment.name.str())? {
                 Resolved::Value(typeid) => Ok(typeid),
                 _ => unreachable!("a type could not be reachable from a instance"),
-            }
-        }
-
-        pub fn resolve_assign(
-            &mut self,
-            scope: ScopeID,
-            expr: &ExprAssign,
-            block_ctx: &BlockCtx,
-        ) -> Result<TypeID, Error> {
-            if !self.is_lvalue(&expr.left) {
-                return Err("invalid left-hand side of assignment".to_string().into());
-            }
-
-            let left = self.resolve_expr(scope, &expr.left, block_ctx)?;
-            let right = self.resolve_expr(scope, &expr.right, block_ctx)?;
-
-            if !self.ctx.is_coercible(right, left) {
-                return Err(format!(
-                    "expected {}, found {}",
-                    self.ctx.type_name(left),
-                    self.ctx.type_name(right)
-                )
-                .into());
-            }
-
-            Ok(self.ctx.primitives.void)
-        }
-
-        pub fn is_lvalue(&mut self, expr: &Expr) -> bool {
-            match expr {
-                Expr::Path(_) => true,
-                Expr::UnaryOp {
-                    op: Operator::Deref,
-                    ..
-                } => true,
-                Expr::Access(_) => true,
-                _ => false,
             }
         }
 
@@ -661,151 +826,6 @@ impl<'a> Checker<'a> {
             }
         }
 
-        pub fn resolve_pathexpr(&mut self, scope: ScopeID, path: &PathExpr) -> Result<Resolved, Error> {
-            let mut it = path.segments.iter();
-            let first = it
-                .next()
-                .ok_or_else(|| "expected at least 1 segment in PathExpr".to_string())?;
-
-            let defid = self
-                .ctx
-                .table
-                .lookup(scope, first.name.str())
-                .ok_or_else(|| format!("'{}' not defined", first.name.str()))?;
-            let def = self
-                .ctx
-                .table
-                .get_def(defid)
-                .ok_or_else(|| format!("unknown definition '{}'", first.name.str()))?;
-
-            let mut current = self.def_to_resolved(def, defid);
-
-            for seg in it {
-                current = self.resolve_next(current, seg.name.str())?;
-            }
-
-            Ok(current)
-        }
-
-        fn def_to_resolved(&self, def: &Definition, def_id: DefID) -> Resolved {
-            match &def.kind {
-                DefKind::Variable { typeid } => Resolved::Value(*typeid),
-                DefKind::Function(sig) => Resolved::Value(sig.typeid),
-                DefKind::Struct(s) => Resolved::Type(s.typeid, def_id),
-                DefKind::Enum(e) => Resolved::Type(e.typeid, def_id),
-                DefKind::Trait(t) => Resolved::Type(t.typeid, def_id),
-                DefKind::TypeAlias(a) => Resolved::Type(a.typeid, def_id),
-                DefKind::Module { scope } => Resolved::Module(*scope),
-            }
-        }
-
-        pub fn resolve_next(&mut self, current: Resolved, name: &str) -> Result<Resolved, Error> {
-            match current {
-                Resolved::Module(scope) => {
-                    let def_id = self.ctx.table.lookup(scope, name).ok_or_else(|| {
-                        format!(
-                            "Cannot resolve member '{}' in module at scope {:?}",
-                            name, scope
-                        )
-                    })?;
-                    let def = self.ctx.table.get_def(def_id).ok_or_else(|| {
-                        format!(
-                            "Cannot resolve member '{}' in module at scope {:?}",
-                            name, scope
-                        )
-                    })?;
-                    Ok(self.def_to_resolved(def, def_id))
-                }
-                Resolved::Value(ty) => {
-                    let field_ty = self.resolve_field_or_method(ty, name)?;
-                    Ok(Resolved::Value(field_ty))
-                }
-                Resolved::Type(typeid, def_id) => {
-                    let def = self.ctx.table.get_def(def_id).unwrap();
-                    match &def.kind {
-                        DefKind::Enum(enum_def) => {
-                            if enum_def.values.contains(&name.to_string()) {
-                                Ok(Resolved::EnumValue(typeid))
-                            } else {
-                                Err(format!("enum '{}' has no value '{}'", def.name, name).into())
-                            }
-                        }
-                        DefKind::Struct(_) => Err(format!(
-                            "cannot access '{}' on type '{}', use an instance",
-                            name, def.name
-                        )
-                        .into()),
-                        DefKind::Trait(_) => {
-                            Err(format!("cannot access '{}' on trait '{}'", name, def.name).into())
-                        }
-                        _ => Err(format!("cannot access '{}' on '{}'", name, def.name).into()),
-                    }
-                }
-                Resolved::EnumValue(_typeid) => {
-                    Err(format!("cannot access '{}' on enum variant, use an instance", name).into())
-                }
-            }
-        }
-
-        /// This method asume the typeid a type of an instanced value, not a type
-        /// So it returns a value type of ar instance methods
-        pub fn resolve_field_or_method(&mut self, typeid: TypeID, name: &str) -> Result<TypeID, Error> {
-            let mut typeid = typeid;
-            loop {
-                match self.ctx.interner.get(typeid) {
-                    Some(TypeDef::Pointer { pointee, .. }) => typeid = *pointee,
-                    _ => break,
-                }
-            }
-
-            if let Some(method) = self.ctx.methods.lookup(name, typeid) {
-                let def = self
-                    .ctx
-                    .table
-                    .get_def(method)
-                    .ok_or_else(|| "internal: method DefID not found".to_string())?;
-
-                match &def.kind {
-                    DefKind::Function(fnsig) => Ok(fnsig.typeid),
-                    _ => unreachable!("MethodTable contains non-function DefID"),
-                }
-            } else if let Some(instance) = self.ctx.interner.get(typeid) {
-                match instance {
-                    TypeDef::UserDef(defid) => {
-                        let Some(def) = self.ctx.table.get_def(*defid) else {
-                            unreachable!("defid not exists");
-                        };
-
-                        match &def.kind {
-                            DefKind::Struct(def) => def.get_field(name).ok_or_else(|| {
-                                {
-                                    format!(
-                                        "no field \"{}\" on type {}",
-                                        name,
-                                        self.ctx.type_name(typeid)
-                                    )
-                                }
-                                .into()
-                            }),
-                            _ => Err(format!(
-                                "no field \"{}\" on type {}",
-                                name,
-                                self.ctx.type_name(typeid)
-                            )
-                            .into()),
-                        }
-                    }
-                    _ => Err(format!(
-                        "no field \"{}\" on type {}",
-                        name,
-                        self.ctx.type_name(typeid)
-                    )
-                    .into()),
-                }
-            } else {
-                unreachable!("TypeID {} not found in interner", typeid.0)
-            }
-        }
 
     */
 }
