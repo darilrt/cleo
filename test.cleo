@@ -1,4 +1,8 @@
+type Foo = struct { a: i32 }
+
+fn foo_a() i32 { 5 }
+
 fn main() {
-    var a: i32 = if true { 1 } else { 2 }
-    a = 20
+    var foo: Foo
+    foo.a = foo_a()
 }

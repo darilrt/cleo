@@ -108,7 +108,7 @@ where
                     .into_iter()
                     .fold(base, |acc, accessor| match accessor {
                         Accessor::Call(args) => Expr::Call(ExprCall {
-                            expr: Box::new(acc),
+                            callee: Box::new(acc),
                             args,
                         }),
                         Accessor::FieldAccess(seg) => Expr::Access(ExprAccess {
@@ -348,9 +348,9 @@ mod test {
         let ast = super::test_parse("obj().method(arg1, arg2)").unwrap();
 
         let expected = Expr::Call(ExprCall {
-            expr: Box::new(Expr::Access(ExprAccess {
+            callee: Box::new(Expr::Access(ExprAccess {
                 expr: Box::new(Expr::Call(ExprCall {
-                    expr: Box::new(Expr::Path(PathExpr {
+                    callee: Box::new(Expr::Path(PathExpr {
                         segments: vec![Segment {
                             name: Ident {
                                 name: "obj".to_string(),

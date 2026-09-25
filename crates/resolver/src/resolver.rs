@@ -1,7 +1,7 @@
 use ast::{Decl, FnDecl, TypeBody, TypeDecl, Unit};
 use errors::Error;
 use types::{
-    DefID, ScopeID, TypeID,
+    ScopeID,
     defs::{FnPointerType, TypeDef},
 };
 
@@ -212,11 +212,4 @@ impl<'a> Resolver<'a> {
 
         Ok(())
     }
-}
-
-pub enum Resolved {
-    Value(TypeID),
-    Type(TypeID, DefID),
-    EnumValue(TypeID),
-    Module(ScopeID),
 }

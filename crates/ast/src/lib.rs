@@ -188,7 +188,7 @@ pub struct ExprAccess {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprCall {
-    pub expr: Box<Expr>,
+    pub callee: Box<Expr>,
     pub args: Vec<Expr>,
 }
 

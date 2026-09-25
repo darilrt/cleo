@@ -1,3 +1,4 @@
+use ast::AssignKind;
 use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug)]
@@ -42,6 +43,15 @@ pub enum ExprIR {
         left: Box<ExprIR>,
         op: String,
         right: Box<ExprIR>,
+    },
+    Assign {
+        left: Box<ExprIR>,
+        kind: AssignKind,
+        right: Box<ExprIR>,
+    },
+    Call {
+        callee: Box<ExprIR>,
+        args: Vec<ExprIR>,
     },
     Atom(String),
 }

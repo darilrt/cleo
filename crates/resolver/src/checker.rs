@@ -1,7 +1,6 @@
-use std::fmt::Alignment::Right;
-
 use ast::{
-    Block, Decl, Expr, ExprAssign, ExprIf, ExprValue, FnDecl, Local, Operator, PathExpr, Stmt, Unit,
+    Block, Decl, Expr, ExprAssign, ExprCall, ExprIf, ExprValue, FnDecl, Local, Operator, PathExpr,
+    Segment, Stmt, Unit,
 };
 use errors::Error;
 use typed_ast::TypedUnit;
@@ -9,7 +8,6 @@ use types::{DefID, ScopeID, TypeID, defs::TypeDef};
 
 use crate::{
     context::Context,
-    resolver::Resolved,
     symbols::{DefKind, Definition},
 };
 
@@ -26,6 +24,13 @@ pub struct BlockCtx {
 
 pub struct Checker<'a> {
     ctx: &'a mut Context,
+}
+
+pub enum Resolved {
+    Value(TypeID),
+    Type(TypeID, DefID),
+    EnumValue(TypeID),
+    Module(ScopeID),
 }
 
 impl<'a> Checker<'a> {
@@ -251,11 +256,18 @@ impl<'a> Checker<'a> {
             }
             Expr::If(expr) => self.resolve_if(scope, expr, block_ctx),
             Expr::Assign(expr) => self.resolve_assign(scope, expr, block_ctx),
-            Expr::Path(path) => match self.resolve_pathexpr(scope, path)? {
-                Resolved::Value(typeid) => Ok(typeid),
-                Resolved::EnumValue(typeid) => Ok(typeid),
-                _ => Err(format!("Expected value, found {:?} in path expression", path).into()),
-            },
+            Expr::Path(path) => {
+                let (segments, resolved) = self.resolve_pathexpr(scope, path)?;
+                Ok(typed_ast::Expr::Path(typed_ast::PathExpr {
+                    segments,
+                    typeid: match resolved {
+                        Resolved::Value(typeid) => typeid,
+                        Resolved::EnumValue(typeid) => typeid,
+                        _ => return Err(format!("Expected value expression").into()),
+                    },
+                }))
+            }
+            Expr::Call(expr) => self.resolve_callexpr(scope, expr, block_ctx),
             _ => {
                 unimplemented!("Expression resolution not implemented for {:?}", expr)
             } // Expr::UnaryOp { op, expr } => self.resolve_unaryop(scope, op, expr, block_ctx),
@@ -274,6 +286,64 @@ impl<'a> Checker<'a> {
         _block_ctx: &BlockCtx,
     ) -> Result<TypeID, Error> {
         todo!("Not implemented loop until codegen")
+    }
+
+    pub fn resolve_callexpr(
+        &mut self,
+        scope: ScopeID,
+        expr: ExprCall,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Expr, Error> {
+        let fnexpr = self.resolve_expr(scope, *expr.callee, block_ctx)?;
+
+        let (params, return_typeid) = {
+            let TypeDef::FnPointer(fn_type) = self
+                .ctx
+                .interner
+                .get(fnexpr.type_id())
+                .ok_or_else(|| format!("type {} does not exists", fnexpr.type_id().0))?
+            else {
+                return Err(format!(
+                    "type {} is not callable",
+                    self.ctx.type_name(fnexpr.type_id())
+                )
+                .into());
+            };
+
+            if fn_type.params.len() != expr.args.len() {
+                return Err(format!(
+                    "expected {} arguments, found {}",
+                    fn_type.params.len(),
+                    expr.args.len()
+                )
+                .into());
+            }
+
+            (fn_type.params.clone(), fn_type.return_type)
+        };
+
+        let args = expr
+            .args
+            .into_iter()
+            .map(|arg| self.resolve_expr(scope, arg, block_ctx))
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        for (param, arg) in params.iter().zip(&args) {
+            if !self.ctx.is_coercible(arg.type_id(), *param) {
+                return Err(format!(
+                    "expected {}, found {}",
+                    self.ctx.type_name(*param),
+                    self.ctx.type_name(arg.type_id())
+                )
+                .into());
+            }
+        }
+
+        Ok(typed_ast::Expr::Call(typed_ast::ExprCall {
+            typeid: return_typeid,
+            args,
+            callee: fnexpr.into(),
+        }))
     }
 
     pub fn resolve_binaryop(
@@ -485,7 +555,11 @@ impl<'a> Checker<'a> {
         }
     }
 
-    pub fn resolve_pathexpr(&mut self, scope: ScopeID, path: &PathExpr) -> Result<Resolved, Error> {
+    pub fn resolve_pathexpr(
+        &mut self,
+        scope: ScopeID,
+        path: PathExpr,
+    ) -> Result<(Vec<Segment>, Resolved), Error> {
         // TODO: Revisar esta implementacion para resolver PathExpressions y devovler un TypedUnit
         let mut it = path.segments.iter();
         let first = it
@@ -509,7 +583,7 @@ impl<'a> Checker<'a> {
             current = self.resolve_next(current, seg.name.str())?;
         }
 
-        Ok(current)
+        Ok((path.segments, current))
     }
 
     pub fn resolve_next(&mut self, current: Resolved, name: &str) -> Result<Resolved, Error> {
@@ -719,53 +793,6 @@ impl<'a> Checker<'a> {
                 Resolved::Value(typeid) => Ok(typeid),
                 _ => unreachable!("a type could not be reachable from a instance"),
             }
-        }
-
-        pub fn resolve_callexpr(
-            &mut self,
-            scope: ScopeID,
-            expr: &ExprCall,
-            block_ctx: &BlockCtx,
-        ) -> Result<TypeID, Error> {
-            let (params, return_type) = {
-                let fn_typeid = self.resolve_expr(scope, &expr.expr, block_ctx)?;
-                let TypeDef::FnPointer(fn_type) = self
-                    .ctx
-                    .interner
-                    .get(fn_typeid)
-                    .ok_or_else(|| format!("type {} does not exists", fn_typeid.0))?
-                else {
-                    return Err(
-                        format!("type {} is not callable", self.ctx.type_name(fn_typeid)).into(),
-                    );
-                };
-
-                if fn_type.params.len() != expr.args.len() {
-                    return Err(format!(
-                        "expected {} arguments, found {}",
-                        fn_type.params.len(),
-                        expr.args.len()
-                    )
-                    .into());
-                }
-
-                (fn_type.params.clone(), fn_type.return_type)
-            };
-
-            for (param, arg) in params.iter().zip(&expr.args) {
-                let arg = self.resolve_expr(scope, arg, block_ctx)?;
-
-                if !self.ctx.is_coercible(arg, *param) {
-                    return Err(format!(
-                        "expected {}, found {}",
-                        self.ctx.type_name(*param),
-                        self.ctx.type_name(arg)
-                    )
-                    .into());
-                }
-            }
-
-            Ok(return_type)
         }
 
         pub fn resolve_unaryop(

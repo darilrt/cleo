@@ -1,4 +1,4 @@
-use ast::{AssignKind, Ident, Operator};
+use ast::{AssignKind, Ident, Operator, Segment};
 use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,12 +33,7 @@ pub struct TraitMethod {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PathExpr {
     pub segments: Vec<Segment>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Segment {
-    pub name: Ident,
-    pub generics: Option<Vec<Type>>,
+    pub typeid: TypeID,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,10 +93,10 @@ impl Expr {
             Expr::Value(_, typeid) => *typeid,
             Expr::BinaryOp { left, .. } => left.type_id(),
             Expr::UnaryOp { expr, .. } => expr.type_id(),
-            Expr::Call(call) => call.expr.type_id(),
+            Expr::Call(call) => call.typeid,
             Expr::Access(access) => access.expr.type_id(),
             Expr::If(if_expr) => if_expr.then_branch.typeid,
-            // Expr::Path(path) => path.segments.last().unwrap().name.type_id,
+            Expr::Path(path) => path.typeid,
             // Expr::Init(init) => init.path.segments.last().unwrap().name.type_id,
             // Expr::Assign(assign) => assign.right.type_id(),
             // Expr::Loop(block) => block.typeid,
@@ -144,7 +139,8 @@ pub struct ExprAccess {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprCall {
-    pub expr: Box<Expr>,
+    pub typeid: TypeID,
+    pub callee: Box<Expr>,
     pub args: Vec<Expr>,
 }
 

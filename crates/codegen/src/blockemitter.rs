@@ -63,6 +63,32 @@ impl<'a, 's> BlockEmitter<'a, 's> {
                 self.emit_expr(buffer, right)?;
                 write!(buffer, ")")?;
             }
+            ExprIR::Call { callee, args } => {
+                self.emit_expr(buffer, callee)?;
+                write!(buffer, "(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(buffer, ", ")?;
+                    }
+                    self.emit_expr(buffer, arg)?;
+                }
+                write!(buffer, ")")?;
+            }
+            ExprIR::Assign { left, kind, right } => {
+                self.emit_expr(buffer, left)?;
+                write!(
+                    buffer,
+                    " {} ",
+                    match kind {
+                        ast::AssignKind::AddEqual => "+=",
+                        ast::AssignKind::SubEqual => "-=",
+                        ast::AssignKind::MulEqual => "*=",
+                        ast::AssignKind::DivEqual => "/=",
+                        ast::AssignKind::Equal => "=",
+                    }
+                )?;
+                self.emit_expr(buffer, right)?;
+            }
         }
 
         Ok(())

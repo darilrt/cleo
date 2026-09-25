@@ -2,7 +2,7 @@ use ast::{ExprValue, Operator};
 use errors::Error;
 use resolver::context;
 use typed_ast::TypedUnit;
-use types::{ TypeID};
+use types::TypeID;
 
 use crate::ir::{BlockIR, ExprIR, FnIR, StmtIR, UnitIR};
 
@@ -13,7 +13,10 @@ pub struct UnitLowerer<'a> {
 
 impl<'a> UnitLowerer<'a> {
     pub fn new(ctx: &'a context::Context) -> Self {
-        Self { ir: UnitIR::new(), ctx }
+        Self {
+            ir: UnitIR::new(),
+            ctx,
+        }
     }
 
     pub fn lower_unit(mut self, unit: TypedUnit) -> Result<UnitIR, Error> {
@@ -45,12 +48,17 @@ impl<'a> FrameLowerer<'a> {
         let temp_name = format!("tmp{}", self.temps);
         self.temps += 1;
 
-        self.stmts.push(StmtIR::Local(temp_name.clone(), typeid, None));
+        self.stmts
+            .push(StmtIR::Local(temp_name.clone(), typeid, None));
 
         temp_name
     }
 
-    pub fn lower_fn(fndecl: typed_ast::FnDecl, temps: u32, ctx: &context::Context) -> Result<FnIR, Error> {
+    pub fn lower_fn(
+        fndecl: typed_ast::FnDecl,
+        temps: u32,
+        ctx: &context::Context,
+    ) -> Result<FnIR, Error> {
         let (_, block) = FrameLowerer::lower_block(fndecl.block, None, temps, ctx)?;
 
         Ok(FnIR {
@@ -135,8 +143,42 @@ impl<'a> FrameLowerer<'a> {
                 typeid,
             } => self.lower_binary_op(*left, op, *right, typeid),
             typed_ast::Expr::If(expr) => self.lower_if(expr),
+            typed_ast::Expr::Assign(expr) => self.lower_assign(expr),
+            typed_ast::Expr::Path(expr) => Ok(ExprIR::Atom(
+                expr.segments
+                    .iter()
+                    .map(|s| s.name.str())
+                    .collect::<Vec<_>>()
+                    .join("."),
+            )),
+            typed_ast::Expr::Call(expr) => self.lower_callexpr(expr),
             _ => unimplemented!("expr"),
         }
+    }
+
+    fn lower_assign(&mut self, expr: typed_ast::ExprAssign) -> Result<ExprIR, Error> {
+        let left = self.lower_expr(*expr.left)?;
+        let right = self.lower_expr(*expr.right)?;
+
+        Ok(ExprIR::Assign {
+            left: Box::new(left),
+            kind: expr.kind,
+            right: Box::new(right),
+        })
+    }
+
+    fn lower_callexpr(&mut self, expr: typed_ast::ExprCall) -> Result<ExprIR, Error> {
+        let callee = self.lower_expr(*expr.callee)?;
+        let args = expr
+            .args
+            .into_iter()
+            .map(|arg| self.lower_expr(arg))
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        Ok(ExprIR::Call {
+            callee: Box::new(callee),
+            args,
+        })
     }
 
     fn lower_binary_op(
@@ -173,7 +215,9 @@ impl<'a> FrameLowerer<'a> {
 
         let else_block = expr
             .else_branch
-            .and_then(|branch| FrameLowerer::lower_block(branch, Some(tmp.clone()), temps, self.ctx).ok())
+            .and_then(|branch| {
+                FrameLowerer::lower_block(branch, Some(tmp.clone()), temps, self.ctx).ok()
+            })
             .map(|(temps, block)| {
                 self.temps = temps;
                 block
