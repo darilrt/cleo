@@ -114,8 +114,19 @@ impl<'a> FrameLowerer<'a> {
         match stmt {
             typed_ast::Stmt::Expr(expr) => Ok(StmtIR::Expr(self.lower_expr(expr)?)),
             typed_ast::Stmt::Local(local) => Ok(self.lower_local(local)?),
+            typed_ast::Stmt::Return(expr) => Ok(self.lower_return(expr)?),
             _ => unimplemented!("stmt"),
         }
+    }
+
+    fn lower_return(&mut self, expr: Option<typed_ast::Expr>) -> Result<StmtIR, Error> {
+        let expr = if let Some(expr) = expr {
+            Some(self.lower_expr(expr)?)
+        } else {
+            None
+        };
+
+        Ok(StmtIR::Return(expr))
     }
 
     fn lower_local(&mut self, local: typed_ast::Local) -> Result<StmtIR, Error> {
@@ -152,8 +163,33 @@ impl<'a> FrameLowerer<'a> {
                     .join("."),
             )),
             typed_ast::Expr::Call(expr) => self.lower_callexpr(expr),
-            _ => unimplemented!("expr"),
+            typed_ast::Expr::UnaryOp {
+                op,
+                expr,
+                typeid: _,
+            } => self.lower_unaryop(op, *expr),
+            typed_ast::Expr::Access(expr) => self.lower_access(expr),
+            _ => unimplemented!("expr {:?}", expr),
         }
+    }
+
+    fn lower_access(&mut self, expr: typed_ast::ExprAccess) -> Result<ExprIR, Error> {
+        let inner = self.lower_expr(*expr.inner)?;
+
+        Ok(ExprIR::Access {
+            inner: Box::new(inner),
+            segment: expr.segment.name.string(),
+        })
+    }
+
+    fn lower_unaryop(&mut self, op: Operator, expr: typed_ast::Expr) -> Result<ExprIR, Error> {
+        Ok(ExprIR::UnaryOp {
+            op: match op {
+                Operator::Ref => "&".to_string(),
+                _ => Err(format!("Invalid unary operator"))?,
+            },
+            expr: Box::new(self.lower_expr(expr)?),
+        })
     }
 
     fn lower_assign(&mut self, expr: typed_ast::ExprAssign) -> Result<ExprIR, Error> {

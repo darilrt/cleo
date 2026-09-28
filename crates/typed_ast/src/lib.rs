@@ -77,6 +77,11 @@ pub enum Expr {
     UnaryOp {
         op: Operator,
         expr: Box<Expr>,
+        typeid: TypeID,
+    },
+    Reinterpret {
+        inner: Box<Expr>,
+        typeid: TypeID,
     },
     Call(ExprCall),
     Access(ExprAccess),
@@ -91,10 +96,14 @@ impl Expr {
     pub fn type_id(&self) -> TypeID {
         match self {
             Expr::Value(_, typeid) => *typeid,
-            Expr::BinaryOp { left, .. } => left.type_id(),
-            Expr::UnaryOp { expr, .. } => expr.type_id(),
+            Expr::BinaryOp { typeid, .. } => *typeid,
+            Expr::UnaryOp {
+                op: _,
+                expr: _,
+                typeid,
+            } => *typeid,
             Expr::Call(call) => call.typeid,
-            Expr::Access(access) => access.expr.type_id(),
+            Expr::Access(access) => access.typeid,
             Expr::If(if_expr) => if_expr.then_branch.typeid,
             Expr::Path(path) => path.typeid,
             // Expr::Init(init) => init.path.segments.last().unwrap().name.type_id,
@@ -133,8 +142,9 @@ pub struct ExprIf {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprAccess {
-    pub expr: Box<Expr>,
+    pub inner: Box<Expr>,
     pub segment: Segment,
+    pub typeid: TypeID,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -2,7 +2,7 @@ use parser::unwrap_or_report_file;
 use resolver::{
     check,
     context::{Context, Primitives},
-    defkinds::TypeAliasDef,
+    defkinds::{FnSig, TypeAliasDef},
     resolve,
     symbols::DefKind,
 };
@@ -59,6 +59,7 @@ fn load_primitives(ctx: &mut Context) {
         f64_: ids[11],
     });
 }
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -77,6 +78,33 @@ fn main() {
 
     let root = ctx.table.root();
 
+    let u8ptr = ctx.interner.intern(types::defs::TypeDef::Pointer {
+        pointee: ctx.primitives.u8_,
+        mutability: false,
+    });
+
+    let fnptr = ctx.interner.intern(types::defs::TypeDef::FnPointer(
+        types::defs::FnPointerType {
+            params: vec![u8ptr],
+            return_type: ctx.primitives.void,
+        },
+    ));
+
+    let _ = ctx.table.define(
+        root,
+        resolver::symbols::Definition {
+            name: "printf".to_string(),
+            kind: DefKind::Function(FnSig {
+                name: "printf".to_string(),
+                params: vec!["value".to_string()],
+                return_type: ctx.primitives.void,
+                resolved: true,
+                typeid: fnptr,
+                is_extern: true,
+            }),
+        },
+    );
+
     match resolve(&mut ctx, root, &unit) {
         Err(err) => {
             println!("Resolve error: {:?}", err);
@@ -86,22 +114,22 @@ fn main() {
     }
 
     let unit = check(&mut ctx, root, unit).expect("Check error: ");
-    // println!("{:?}", unit);
 
     let mut output = Vec::new();
+
     if let Err(err) = codegen::generate(&mut ctx, &mut output, root, unit) {
         println!("Codegen error: {:?}", err);
         return;
     }
     let result = std::str::from_utf8(&output).unwrap();
-    // println!("{}", s);
+    println!("{}", result);
 
-    print_side_by_side(&source, result);
+    // print_side_by_side(&source, result);
 
     // println!("{}", ctx.debug(types::ScopeID(0), false));
 }
 
-fn print_side_by_side(src: &str, result: &str) {
+fn _print_side_by_side(src: &str, result: &str) {
     let src_lines: Vec<&str> = src.lines().collect();
     let result_lines: Vec<&str> = result.lines().collect();
 

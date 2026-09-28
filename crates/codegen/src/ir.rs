@@ -35,6 +35,7 @@ pub enum StmtIR {
     Local(String, TypeID, Option<ExprIR>),
     Assign(String, ExprIR),
     If(ExprIR, BlockIR, Option<BlockIR>),
+    Return(Option<ExprIR>),
 }
 
 #[derive(Debug)]
@@ -43,6 +44,10 @@ pub enum ExprIR {
         left: Box<ExprIR>,
         op: String,
         right: Box<ExprIR>,
+    },
+    UnaryOp {
+        op: String,
+        expr: Box<ExprIR>,
     },
     Assign {
         left: Box<ExprIR>,
@@ -53,7 +58,17 @@ pub enum ExprIR {
         callee: Box<ExprIR>,
         args: Vec<ExprIR>,
     },
+    Access {
+        inner: Box<ExprIR>,
+        segment: String,
+    },
     Atom(String),
+    Intrinsic(Intrinsic),
+}
+
+#[derive(Debug)]
+pub enum Intrinsic {
+    Reinterpret { from: Box<ExprIR>, to: TypeID },
 }
 
 #[derive(Debug)]

@@ -6,7 +6,7 @@ use types::ScopeID;
 
 use crate::{
     codegen::emit_type,
-    ir::{BlockIR, ExprIR, StmtIR},
+    ir::{BlockIR, ExprIR, Intrinsic, StmtIR},
 };
 
 #[allow(unused)]
@@ -47,6 +47,17 @@ impl<'a, 's> BlockEmitter<'a, 's> {
                     self.emit_if(buffer, expr, if_block, else_block.as_ref())?;
                     writeln!(buffer, "")
                 }
+                StmtIR::Return(expr) => {
+                    write!(buffer, "return")?;
+
+                    if let Some(expr) = expr {
+                        write!(buffer, " ")?;
+                        self.emit_expr(buffer, expr)?;
+                    }
+
+                    writeln!(buffer, ";")?;
+                    Ok(())
+                }
             }?;
         }
 
@@ -55,6 +66,13 @@ impl<'a, 's> BlockEmitter<'a, 's> {
 
     fn emit_expr(&self, buffer: &mut impl io::Write, expr: &ExprIR) -> Result<(), Error> {
         match expr {
+            ExprIR::Intrinsic(intrinsic) => {
+                self.emit_intrinsic(buffer, intrinsic)?;
+            }
+            ExprIR::Access { inner, segment } => {
+                self.emit_expr(buffer, inner)?;
+                write!(buffer, ".{}", segment)?;
+            }
             ExprIR::Atom(value) => write!(buffer, "{}", value)?,
             ExprIR::BinaryOp { left, op, right } => {
                 write!(buffer, "(")?;
@@ -89,8 +107,28 @@ impl<'a, 's> BlockEmitter<'a, 's> {
                 )?;
                 self.emit_expr(buffer, right)?;
             }
+            ExprIR::UnaryOp { op, expr } => {
+                write!(buffer, "{}", op)?;
+                self.emit_expr(buffer, expr)?;
+            }
         }
 
+        Ok(())
+    }
+
+    fn emit_intrinsic(
+        &self,
+        buffer: &mut impl io::Write,
+        intrinsic: &Intrinsic,
+    ) -> Result<(), Error> {
+        match intrinsic {
+            Intrinsic::Reinterpret { from, to } => {
+                write!(buffer, "(")?;
+                emit_type(self.ctx, buffer, *to, "")?;
+                write!(buffer, ")")?;
+                self.emit_expr(buffer, from)?;
+            }
+        }
         Ok(())
     }
 

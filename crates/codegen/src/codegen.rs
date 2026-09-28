@@ -47,7 +47,7 @@ impl<'a> Codegen<'a> {
                     for (name, typeid) in &def.fields {
                         write!(definitions, "  ")?;
                         emit_type(self.ctx, &mut definitions, *typeid, name)?;
-                        writeln!(definitions, "")?;
+                        writeln!(definitions, ";")?;
                     }
                     writeln!(definitions, "}};\n")?;
                 }
@@ -82,6 +82,9 @@ impl<'a> Codegen<'a> {
 
             match &def.kind {
                 DefKind::Function(fnsig) => {
+                    if fnsig.is_extern {
+                        continue;
+                    }
                     self.emit_fn_sig(buffer, fnsig)?;
                     writeln!(buffer, ";")?;
                 }
@@ -149,6 +152,11 @@ pub fn emit_type<'a>(
         .interner
         .get(typeid)
         .ok_or_else(|| format!("Type {} does not exists", typeid.0))?;
+
+    if let Some(cname) = ctx.primitives.c_name(typeid) {
+        write!(buffer, "{} {}", cname, ident)?;
+        return Ok(());
+    }
 
     match type_def {
         TypeDef::Void => write!(buffer, "void {}", ident),

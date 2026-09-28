@@ -1,6 +1,6 @@
 use ast::{
-    Block, Decl, Expr, ExprAssign, ExprCall, ExprIf, ExprValue, FnDecl, Local, Operator, PathExpr,
-    Segment, Stmt, Unit,
+    Block, Decl, Expr, ExprAccess, ExprAssign, ExprCall, ExprIf, ExprValue, FnDecl, Local,
+    Operator, PathExpr, Segment, Stmt, Unit,
 };
 use errors::Error;
 use typed_ast::TypedUnit;
@@ -183,52 +183,67 @@ impl<'a> Checker<'a> {
         block_ctx: &BlockCtx,
     ) -> Result<typed_ast::Stmt, Error> {
         match stmt {
-            // Stmt::Break => {
-            //     if !block_ctx.allow_break {
-            //         return Err("Not allowed Break here".to_string().into());
-            //     }
-            // }
-            // Stmt::Continue => {
-            //     if !block_ctx.allow_continue {
-            //         return Err("Not allowed Continue here".to_string().into());
-            //     }
-            // }
-            // Stmt::Return(value) => match (block_ctx.expected_return, value) {
-            //     (Some(expected), None) => {
-            //         return Err(format!(
-            //             "expected return value of type {}",
-            //             self.ctx.type_name(expected)
-            //         )
-            //         .into());
-            //     }
-            //     (None, Some(_)) => {
-            //         return Err("unexpected return value in void function"
-            //             .to_string()
-            //             .into());
-            //     }
-            //     (Some(expected), Some(expr)) => {
-            //         let ret_type = self.resolve_expr(scope, expr, block_ctx)?;
-            //         if !self.ctx.is_coercible(ret_type, expected) {
-            //             return Err(format!(
-            //                 "expected return type {}, found {}",
-            //                 self.ctx.type_name(expected),
-            //                 self.ctx.type_name(ret_type)
-            //             )
-            //             .into());
-            //         }
-            //     }
-            //     (None, None) => {}
-            // },
-            // Stmt::Defer(expr) => {
-            //     self.resolve_expr(scope, expr, block_ctx)?;
-            // }
+            Stmt::Break => {
+                if !block_ctx.allow_break {
+                    return Err("Not allowed Break here".to_string().into());
+                }
+
+                unimplemented!("");
+            }
+            Stmt::Continue => {
+                if !block_ctx.allow_continue {
+                    return Err("Not allowed Continue here".to_string().into());
+                }
+
+                unimplemented!("");
+            }
+            Stmt::Defer(expr) => Ok(typed_ast::Stmt::Defer(
+                self.resolve_expr(scope, expr, block_ctx)?,
+            )),
             Stmt::Expr(expr) => Ok(typed_ast::Stmt::Expr(
                 self.resolve_expr(scope, expr, block_ctx)?,
             )),
             Stmt::Local(local) => Ok(typed_ast::Stmt::Local(
                 self.resolve_local(scope, local, block_ctx)?,
             )),
-            _ => unimplemented!("Statement resolution not implemented for {:?}", stmt),
+            Stmt::Return(expr) => self.resolve_return(scope, expr, block_ctx),
+        }
+    }
+
+    pub fn resolve_return(
+        &mut self,
+        scope: ScopeID,
+        expr: Option<Expr>,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Stmt, Error> {
+        match (block_ctx.expected_return, expr) {
+            (Some(expected), None) => {
+                return Err(format!(
+                    "expected return value of type {}",
+                    self.ctx.type_name(expected)
+                )
+                .into());
+            }
+            (None, Some(_)) => {
+                return Err("unexpected return value in void function"
+                    .to_string()
+                    .into());
+            }
+            (Some(expected), Some(expr)) => {
+                let return_expr = self.resolve_expr(scope, expr, block_ctx)?;
+
+                if !self.ctx.is_coercible(return_expr.type_id(), expected) {
+                    return Err(format!(
+                        "expected return type {}, found {}",
+                        self.ctx.type_name(expected),
+                        self.ctx.type_name(return_expr.type_id())
+                    )
+                    .into());
+                }
+
+                Ok(typed_ast::Stmt::Return(Some(return_expr)))
+            }
+            (None, None) => Ok(typed_ast::Stmt::Return(None)),
         }
     }
 
@@ -244,9 +259,9 @@ impl<'a> Checker<'a> {
                     ExprValue::Integer(_lit) => self.ctx.primitives.i32_,
                     ExprValue::Float(_lit) => self.ctx.primitives.f32_,
                     ExprValue::Bool(_value) => self.ctx.primitives.bool_,
-                    ExprValue::String(lit) => self.ctx.interner.intern(TypeDef::Array {
-                        element: self.ctx.primitives.u8_,
-                        size: lit.len(),
+                    ExprValue::String(_lit) => self.ctx.interner.intern(TypeDef::Pointer {
+                        pointee: self.ctx.primitives.u8_,
+                        mutability: false,
                     }),
                 };
                 Ok(typed_ast::Expr::Value(value, typeid))
@@ -267,13 +282,12 @@ impl<'a> Checker<'a> {
                     },
                 }))
             }
-            Expr::Call(expr) => self.resolve_callexpr(scope, expr, block_ctx),
+            Expr::UnaryOp { op, expr } => self.resolve_unaryop(scope, op, *expr, block_ctx),
+            Expr::Call(expr) => self.resolve_callexpr_or_intrinsic(scope, expr, block_ctx),
+            Expr::Access(expr) => self.resolve_access(scope, expr, block_ctx),
             _ => {
                 unimplemented!("Expression resolution not implemented for {:?}", expr)
-            } // Expr::UnaryOp { op, expr } => self.resolve_unaryop(scope, op, expr, block_ctx),
-              //   Expr::Call(expr) => self.resolve_callexpr(scope, expr, block_ctx),
-              // Expr::Assign(expr) => self.resolve_assign(scope, expr, block_ctx),
-              // Expr::Access(expr) => self.resolve_access(scope, expr, block_ctx),
+            } // Expr::Access(expr) => self.resolve_access(scope, expr, block_ctx),
               // Expr::Init(expr) => self.resolve_init(scope, expr, block_ctx),
               // Expr::Loop(block) => self.resolve_loop(scope, block, block_ctx),
         }
@@ -286,6 +300,19 @@ impl<'a> Checker<'a> {
         _block_ctx: &BlockCtx,
     ) -> Result<TypeID, Error> {
         todo!("Not implemented loop until codegen")
+    }
+
+    pub fn resolve_callexpr_or_intrinsic(
+        &mut self,
+        scope: ScopeID,
+        expr: ExprCall,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Expr, Error> {
+        if self.is_intrinsic(&expr.callee) {
+            self.resolve_intrinsic_call(scope, expr, block_ctx)
+        } else {
+            self.resolve_callexpr(scope, expr, block_ctx)
+        }
     }
 
     pub fn resolve_callexpr(
@@ -344,6 +371,60 @@ impl<'a> Checker<'a> {
             args,
             callee: fnexpr.into(),
         }))
+    }
+
+    fn is_intrinsic(&mut self, callee: &Expr) -> bool {
+        match callee {
+            Expr::Path(expr) => {
+                if expr.segments.len() == 1 {
+                    expr.segments[0].name.str() == "reinterpret"
+                } else {
+                    false
+                }
+            }
+            _ => return false,
+        }
+    }
+
+    fn resolve_intrinsic_call(
+        &mut self,
+        scope: ScopeID,
+        mut expr: ExprCall,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Expr, Error> {
+        let name = match *expr.callee {
+            Expr::Path(expr) => {
+                if expr.segments.len() != 1 {
+                    unreachable!()
+                } else {
+                    expr.segments[0].name.string()
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        if name != "reinterpret" {
+            return Err(format!("Unknown intrinsic '{}'", name).into());
+        }
+
+        if expr.args.len() != 1 {
+            return Err("reinterpret expects exactly 1 argument".to_string().into());
+        }
+        let value = self.resolve_expr(scope, expr.args[0].clone(), block_ctx)?;
+
+        if expr.genercis.len() != 1 {
+            return Err("reinterpret expects exactly 1 generic argument"
+                .to_string()
+                .into());
+        }
+
+        let type_generic = expr.genercis.remove(0);
+        let generic = self.resolve_expr(scope, type_generic, block_ctx)?;
+
+        Ok(typed_ast::Expr::Reinterpret {
+            inner: Box::new(value),
+            typeid: generic.type_id(),
+        })
     }
 
     pub fn resolve_binaryop(
@@ -706,6 +787,101 @@ impl<'a> Checker<'a> {
         }
     }
 
+    pub fn resolve_unaryop(
+        &mut self,
+        scope: ScopeID,
+        op: Operator,
+        expr: Expr,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Expr, Error> {
+        let expr = self.resolve_expr(scope, expr, block_ctx)?;
+        let typeid = expr.type_id();
+
+        match op {
+            // Operator::Neg => {
+            //     if self.ctx.primitives.is_negatable(typeid) {
+            //         Ok(typeid)
+            //     } else {
+            //         Err(format!("cannot negate {}", self.ctx.type_name(typeid)).into())
+            //     }
+            // }
+            // Operator::Not => {
+            //     if self.ctx.primitives.is_bool(typeid) {
+            //         Ok(typeid)
+            //     } else {
+            //         Err(format!("expected bool, found {}", self.ctx.type_name(typeid)).into())
+            //     }
+            // }
+            // Operator::Deref => match self
+            //     .ctx
+            //     .interner
+            //     .get(typeid)
+            //     .ok_or_else(|| format!("type {} does not exists", typeid.0))?
+            // {
+            //     TypeDef::Pointer {
+            //         pointee,
+            //         mutability: _,
+            //     } => Ok(*pointee),
+            //     _ => Err(format!("cannot dereference {}", self.ctx.type_name(typeid)).into()),
+            // },
+            Operator::Ref => match self
+                .ctx
+                .interner
+                .get(typeid)
+                .ok_or_else(|| format!("type {} does not exists", typeid.0))?
+            {
+                TypeDef::Array { element, size: _ } => {
+                    let typeid = self.ctx.interner.intern(TypeDef::Pointer {
+                        pointee: *element,
+                        mutability: true,
+                    });
+                    Ok(typed_ast::Expr::UnaryOp {
+                        op,
+                        expr: Box::new(expr),
+                        typeid: typeid,
+                    })
+                }
+                TypeDef::FnPointer(_) => Ok(typed_ast::Expr::UnaryOp {
+                    op,
+                    expr: Box::new(expr),
+                    typeid: typeid,
+                }),
+                _ => {
+                    let typeid = self.ctx.interner.intern(TypeDef::Pointer {
+                        pointee: typeid,
+                        mutability: true,
+                    });
+
+                    Ok(typed_ast::Expr::UnaryOp {
+                        op,
+                        expr: Box::new(expr),
+                        typeid: typeid,
+                    })
+                }
+            },
+            _ => unreachable!("not a unary operator"),
+        }
+    }
+
+    pub fn resolve_access(
+        &mut self,
+        scope: ScopeID,
+        expr: ExprAccess,
+        block_ctx: &BlockCtx,
+    ) -> Result<typed_ast::Expr, Error> {
+        let inner = self.resolve_expr(scope, *expr.inner, block_ctx)?;
+        let base = Resolved::Value(inner.type_id());
+
+        match self.resolve_next(base, expr.segment.name.str())? {
+            Resolved::Value(typeid) => Ok(typed_ast::Expr::Access(typed_ast::ExprAccess {
+                inner: Box::new(inner),
+                segment: expr.segment,
+                typeid: typeid,
+            })),
+            _ => unreachable!("a type could not be reachable from a instance"),
+        }
+    }
+
     /*
         pub fn resolve_init(
         &mut self,
@@ -780,78 +956,6 @@ impl<'a> Checker<'a> {
 
         Ok(typeid)
     }
-
-        pub fn resolve_access(
-            &mut self,
-            scope: ScopeID,
-            expr: &ExprAccess,
-            block_ctx: &BlockCtx,
-        ) -> Result<TypeID, Error> {
-            let base = Resolved::Value(self.resolve_expr(scope, &expr.expr, block_ctx)?);
-
-            match self.resolve_next(base, expr.segment.name.str())? {
-                Resolved::Value(typeid) => Ok(typeid),
-                _ => unreachable!("a type could not be reachable from a instance"),
-            }
-        }
-
-        pub fn resolve_unaryop(
-            &mut self,
-            scope: ScopeID,
-            op: &Operator,
-            expr: &Expr,
-            block_ctx: &BlockCtx,
-        ) -> Result<TypeID, Error> {
-            let typeid = self.resolve_expr(scope, expr, block_ctx)?;
-
-            match op {
-                Operator::Neg => {
-                    if self.ctx.primitives.is_negatable(typeid) {
-                        Ok(typeid)
-                    } else {
-                        Err(format!("cannot negate {}", self.ctx.type_name(typeid)).into())
-                    }
-                }
-                Operator::Not => {
-                    if self.ctx.primitives.is_bool(typeid) {
-                        Ok(typeid)
-                    } else {
-                        Err(format!("expected bool, found {}", self.ctx.type_name(typeid)).into())
-                    }
-                }
-                Operator::Deref => match self
-                    .ctx
-                    .interner
-                    .get(typeid)
-                    .ok_or_else(|| format!("type {} does not exists", typeid.0))?
-                {
-                    TypeDef::Pointer {
-                        pointee,
-                        mutability: _,
-                    } => Ok(*pointee),
-                    _ => Err(format!("cannot dereference {}", self.ctx.type_name(typeid)).into()),
-                },
-                Operator::Ref => match self
-                    .ctx
-                    .interner
-                    .get(typeid)
-                    .ok_or_else(|| format!("type {} does not exists", typeid.0))?
-                {
-                    TypeDef::Array { element, size: _ } => {
-                        Ok(self.ctx.interner.intern(TypeDef::Pointer {
-                            pointee: *element,
-                            mutability: true,
-                        }))
-                    }
-                    TypeDef::FnPointer(..) => Ok(typeid),
-                    _ => Ok(self.ctx.interner.intern(TypeDef::Pointer {
-                        pointee: typeid,
-                        mutability: true,
-                    })),
-                },
-                _ => unreachable!("not a unary operator"),
-            }
-        }
 
 
     */

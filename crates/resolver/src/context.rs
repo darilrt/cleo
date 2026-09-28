@@ -276,6 +276,24 @@ impl Primitives {
     pub fn is_comparable(&self, ty: TypeID) -> bool {
         self.is_numeric(ty) || ty == self.bool_
     }
+
+    pub fn c_name(&self, ty: TypeID) -> Option<&'static str> {
+        Some(match ty {
+            t if t == self.void => "void",
+            t if t == self.bool_ => "bool",
+            t if t == self.i8_ => "int8_t",
+            t if t == self.i16_ => "int16_t",
+            t if t == self.i32_ => "int32_t",
+            t if t == self.i64_ => "int64_t",
+            t if t == self.u8_ => "uint8_t",
+            t if t == self.u16_ => "uint16_t",
+            t if t == self.u32_ => "uint32_t",
+            t if t == self.u64_ => "uint64_t",
+            t if t == self.f32_ => "float",
+            t if t == self.f64_ => "double",
+            _ => return None,
+        })
+    }
 }
 
 #[cfg(test)]

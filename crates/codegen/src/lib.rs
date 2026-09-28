@@ -23,6 +23,8 @@ pub fn generate(
 
     let codegen = codegen::Codegen::new(ctx);
 
+    writeln!(buffer, "#include <stdint.h>")?;
+    writeln!(buffer, "#include <stdio.h>\n")?;
     codegen.emit_header(buffer, scope)?;
 
     for fnir in ir.fns() {

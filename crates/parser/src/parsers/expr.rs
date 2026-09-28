@@ -110,9 +110,10 @@ where
                         Accessor::Call(args) => Expr::Call(ExprCall {
                             callee: Box::new(acc),
                             args,
+                            genercis: Vec::new(),
                         }),
                         Accessor::FieldAccess(seg) => Expr::Access(ExprAccess {
-                            expr: Box::new(acc),
+                            inner: Box::new(acc),
                             segment: seg,
                         }),
                     })
@@ -349,7 +350,8 @@ mod test {
 
         let expected = Expr::Call(ExprCall {
             callee: Box::new(Expr::Access(ExprAccess {
-                expr: Box::new(Expr::Call(ExprCall {
+                inner: Box::new(Expr::Call(ExprCall {
+                    genercis: Vec::new(),
                     callee: Box::new(Expr::Path(PathExpr {
                         segments: vec![Segment {
                             name: Ident {
@@ -385,6 +387,7 @@ mod test {
                     }],
                 }),
             ],
+            genercis: Vec::new(),
         });
 
         assert_eq!(ast, expected);

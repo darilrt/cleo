@@ -1,8 +1,5 @@
-type Foo = struct { a: i32 }
-
-fn foo_a() i32 { 5 }
 
 fn main() {
-    var foo: Foo
-    foo.a = foo_a()
+    var a: [12]u8
+    var b: *u8 = reinterpret[*u8](a)
 }

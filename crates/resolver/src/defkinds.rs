@@ -42,4 +42,5 @@ pub struct FnSig {
     pub typeid: TypeID,
     pub return_type: TypeID,
     pub resolved: bool,
+    pub is_extern: bool,
 }

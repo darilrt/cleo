@@ -182,7 +182,7 @@ pub enum ExprValue {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprAccess {
-    pub expr: Box<Expr>,
+    pub inner: Box<Expr>,
     pub segment: Segment,
 }
 
@@ -190,6 +190,7 @@ pub struct ExprAccess {
 pub struct ExprCall {
     pub callee: Box<Expr>,
     pub args: Vec<Expr>,
+    pub genercis: Vec<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -49,6 +49,7 @@ pub fn gather_decl(
                         return_type: TypeID(0),
                         resolved: false,
                         typeid: TypeID(0),
+                        is_extern: false,
                     }),
                 };
 
