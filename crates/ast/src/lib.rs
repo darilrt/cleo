@@ -12,6 +12,11 @@ pub enum Decl {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Attribute {
+    pub name: Ident,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Ident {
     pub name: String,
 }
@@ -190,7 +195,6 @@ pub struct ExprAccess {
 pub struct ExprCall {
     pub callee: Box<Expr>,
     pub args: Vec<Expr>,
-    pub genercis: Vec<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -241,8 +245,9 @@ impl Operator {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FnDecl {
+    pub attrs: Vec<Attribute>,
     pub signature: FnSignature,
-    pub block: Block,
+    pub block: Option<Block>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -4,7 +4,7 @@ use resolver::context;
 use typed_ast::TypedUnit;
 use types::TypeID;
 
-use crate::ir::{BlockIR, ExprIR, FnIR, StmtIR, UnitIR};
+use crate::ir::{BlockIR, ExprIR, FnIR, Intrinsic, StmtIR, UnitIR};
 
 pub struct UnitLowerer<'a> {
     ir: UnitIR,
@@ -169,8 +169,24 @@ impl<'a> FrameLowerer<'a> {
                 typeid: _,
             } => self.lower_unaryop(op, *expr),
             typed_ast::Expr::Access(expr) => self.lower_access(expr),
+            typed_ast::Expr::Reinterpret { inner, typeid } => {
+                self.lower_reinterpret(*inner, typeid)
+            }
             _ => unimplemented!("expr {:?}", expr),
         }
+    }
+
+    fn lower_reinterpret(
+        &mut self,
+        inner: typed_ast::Expr,
+        typeid: TypeID,
+    ) -> Result<ExprIR, Error> {
+        let inner = self.lower_expr(inner)?;
+
+        Ok(ExprIR::Intrinsic(Intrinsic::Reinterpret {
+            from: Box::new(inner),
+            to: typeid,
+        }))
     }
 
     fn lower_access(&mut self, expr: typed_ast::ExprAccess) -> Result<ExprIR, Error> {

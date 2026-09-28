@@ -1,5 +1,10 @@
 
+@extern
+fn puts(s: *const u8)
+
 fn main() {
-    var a: [12]u8
-    var b: *u8 = reinterpret[*u8](a)
+    var a: [17]u8 = "Hello, World!\n"
+    var b: *const u8 = reinterpret[*u8](&a)
+
+    puts(b)
 }

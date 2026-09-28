@@ -259,10 +259,14 @@ impl<'a> Checker<'a> {
                     ExprValue::Integer(_lit) => self.ctx.primitives.i32_,
                     ExprValue::Float(_lit) => self.ctx.primitives.f32_,
                     ExprValue::Bool(_value) => self.ctx.primitives.bool_,
-                    ExprValue::String(_lit) => self.ctx.interner.intern(TypeDef::Pointer {
-                        pointee: self.ctx.primitives.u8_,
-                        mutability: false,
+                    ExprValue::String(lit) => self.ctx.interner.intern(TypeDef::Array {
+                        element: self.ctx.primitives.u8_,
+                        size: lit.len(),
                     }),
+                    // ExprValue::String(_lit) => self.ctx.interner.intern(TypeDef::Pointer {
+                    //     pointee: self.ctx.primitives.u8_,
+                    //     mutability: false,
+                    // }),
                 };
                 Ok(typed_ast::Expr::Value(value, typeid))
             }
@@ -389,41 +393,47 @@ impl<'a> Checker<'a> {
     fn resolve_intrinsic_call(
         &mut self,
         scope: ScopeID,
-        mut expr: ExprCall,
+        expr: ExprCall,
         block_ctx: &BlockCtx,
     ) -> Result<typed_ast::Expr, Error> {
-        let name = match *expr.callee {
-            Expr::Path(expr) => {
-                if expr.segments.len() != 1 {
-                    unreachable!()
-                } else {
-                    expr.segments[0].name.string()
-                }
-            }
-            _ => unreachable!(),
+        let ExprCall { callee, args } = expr;
+        let Expr::Path(callee) = *callee else {
+            return Err("intrinsic call must be a path".to_string().into());
         };
+
+        let PathExpr { mut segments } = callee;
+
+        if segments.len() != 1 {
+            return Err("intrinsic call must be a single segment".to_string().into());
+        }
+        let segment = segments.remove(0);
+        let name = segment.name.str();
 
         if name != "reinterpret" {
             return Err(format!("Unknown intrinsic '{}'", name).into());
         }
 
-        if expr.args.len() != 1 {
+        if args.len() != 1 {
             return Err("reinterpret expects exactly 1 argument".to_string().into());
         }
-        let value = self.resolve_expr(scope, expr.args[0].clone(), block_ctx)?;
+        let value = self.resolve_expr(scope, args[0].clone(), block_ctx)?;
 
-        if expr.genercis.len() != 1 {
-            return Err("reinterpret expects exactly 1 generic argument"
+        let Some(generics) = segment.generics else {
+            return Err("reinterpret expects exactly 1 geneirc argument"
+                .to_string()
+                .into());
+        };
+
+        if generics.len() != 1 {
+            return Err("reinterpret expects exactly 1 geneirc argument"
                 .to_string()
                 .into());
         }
-
-        let type_generic = expr.genercis.remove(0);
-        let generic = self.resolve_expr(scope, type_generic, block_ctx)?;
+        let generic = self.ctx.resolve_id(scope, &generics[0])?;
 
         Ok(typed_ast::Expr::Reinterpret {
             inner: Box::new(value),
-            typeid: generic.type_id(),
+            typeid: generic,
         })
     }
 

@@ -1,4 +1,4 @@
-use ast::{FnDecl, FnParam, FnSignature, Ident};
+use ast::{Attribute, FnDecl, FnParam, FnSignature, Ident};
 use chumsky::{IterParser, Parser, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
@@ -7,6 +7,19 @@ use crate::{
     parsers::{block::block, generic_params::generic_params, ident::ident},
     test_parser, type_parser,
 };
+
+pub fn attributes<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, Vec<Attribute>>
+where
+    I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
+{
+    just(TokenKind::At)
+        .ignore_then(ident())
+        .map(|attr| Attribute { name: attr })
+        .separated_by(just(TokenKind::Semicolon))
+        .allow_trailing()
+        .collect()
+        .boxed()
+}
 
 // signature := ident generic_list? parameter_list return_type?
 pub fn fn_signature<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, FnSignature>
@@ -79,21 +92,30 @@ pub fn fn_decl<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, FnD
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
-    just(TokenKind::Fn)
-        .ignore_then(fn_signature())
-        .then(block())
-        .map(|(signature, block)| FnDecl { signature, block })
+    attributes()
+        .then(
+            just(TokenKind::Fn)
+                .ignore_then(fn_signature())
+                .then(block().or_not()),
+        )
+        .map(|(attrs, (signature, block))| FnDecl {
+            signature,
+            block,
+            attrs,
+        })
         .boxed()
 }
 
 test_parser!(fn_decl() => FnDecl);
 
 mod test {
+    #[allow(unused_imports)]
+    use ast::Block;
 
     #[test]
     fn test_fn_decl_parser() {
         use super::*;
-        use ast::{Block, GenericParam, GenericParams, PathExpr, Segment, Type};
+        use ast::{GenericParam, GenericParams, PathExpr, Segment, Type};
 
         let source = "fn foo[T: int, U](x: int, y: U) int { }";
         let result = test_parse(source);
@@ -165,7 +187,8 @@ mod test {
                         }]
                     })),
                 },
-                block: Block { statements: vec![] }
+                block: Some(Block { statements: vec![] }),
+                attrs: Vec::new(),
             }
         )
     }

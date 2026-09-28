@@ -106,6 +106,7 @@ impl Expr {
             Expr::Access(access) => access.typeid,
             Expr::If(if_expr) => if_expr.then_branch.typeid,
             Expr::Path(path) => path.typeid,
+            Expr::Reinterpret { inner: _, typeid } => *typeid,
             // Expr::Init(init) => init.path.segments.last().unwrap().name.type_id,
             // Expr::Assign(assign) => assign.right.type_id(),
             // Expr::Loop(block) => block.typeid,
