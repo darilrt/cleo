@@ -1,5 +1,6 @@
 
 @extern
+@no_emit
 fn puts(s: *const u8)
 
 fn main() {

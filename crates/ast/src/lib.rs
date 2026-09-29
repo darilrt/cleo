@@ -250,6 +250,15 @@ pub struct FnDecl {
     pub block: Option<Block>,
 }
 
+impl FnDecl {
+    pub fn has_attr(&self, name: &str) -> bool {
+        self.attrs
+            .iter()
+            .find(|attr| attr.name.str() == name)
+            .is_some()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FnSignature {
     pub name: Ident,

@@ -21,6 +21,10 @@ impl<'a> UnitLowerer<'a> {
 
     pub fn lower_unit(mut self, unit: TypedUnit) -> Result<UnitIR, Error> {
         for decl in unit.decls {
+            if decl.no_emit {
+                continue;
+            }
+
             let fnir = FrameLowerer::lower_fn(decl, 0, self.ctx)?;
             self.ir.add_fn(fnir);
         }

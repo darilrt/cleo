@@ -44,7 +44,9 @@ impl<'a> Checker<'a> {
         for decl in unit.decls {
             match decl {
                 Decl::Fn(decl) => {
-                    out.decls.push(self.resolve_fn(scope, decl)?);
+                    if let Some(f) = self.resolve_fn(scope, decl)? {
+                        out.decls.push(f);
+                    }
                 }
                 _ => {}
             }
@@ -53,7 +55,11 @@ impl<'a> Checker<'a> {
         Ok(out)
     }
 
-    pub fn resolve_fn(&mut self, scope: ScopeID, decl: FnDecl) -> Result<typed_ast::FnDecl, Error> {
+    pub fn resolve_fn(
+        &mut self,
+        scope: ScopeID,
+        decl: FnDecl,
+    ) -> Result<Option<typed_ast::FnDecl>, Error> {
         let fn_name = decl.signature.name.str();
 
         let defid = self
@@ -113,26 +119,31 @@ impl<'a> Checker<'a> {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let block = self.resolve_block(
-            scopeid,
-            decl.block.statements,
-            &BlockCtx {
-                allow_break: false,
-                allow_continue: false,
-                expected_return: Some(fntype.return_type),
-            },
-        )?;
-
-        Ok(typed_ast::FnDecl {
-            signature: typed_ast::FnSignature {
-                name: decl.signature.name,
-                params: params_defid,
-            },
-            block,
-            scopeid,
-            typeid,
-            defid,
-        })
+        if decl.has_attr("extern") {
+            Ok(None)
+        } else {
+            Ok(Some(typed_ast::FnDecl {
+                no_emit: decl.has_attr("no_emit"),
+                signature: typed_ast::FnSignature {
+                    name: decl.signature.name,
+                    params: params_defid,
+                },
+                block: self.resolve_block(
+                    scopeid,
+                    decl.block
+                        .ok_or("expected a function body".to_string())?
+                        .statements,
+                    &BlockCtx {
+                        allow_break: false,
+                        allow_continue: false,
+                        expected_return: Some(fntype.return_type),
+                    },
+                )?,
+                scopeid,
+                typeid,
+                defid,
+            }))
+        }
     }
 
     pub fn resolve_block(

@@ -50,6 +50,7 @@ pub enum Stmt {
     Break,
     Continue,
     Local(Local),
+    Extern(FnSignature),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -157,6 +158,7 @@ pub struct ExprCall {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FnDecl {
+    pub no_emit: bool,
     pub signature: FnSignature,
     pub block: Block,
     pub scopeid: ScopeID,
