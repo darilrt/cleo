@@ -2,7 +2,7 @@ use parser::unwrap_or_report_file;
 use resolver::{
     check,
     context::{Context, Primitives},
-    defkinds::{FnSig, TypeAliasDef},
+    defkinds::TypeAliasDef,
     resolve,
     symbols::DefKind,
 };
@@ -13,7 +13,6 @@ fn load_primitives(ctx: &mut Context) {
     let root = ctx.table.root();
 
     let entries = [
-        ("void", TypeDef::Void),
         ("bool", TypeDef::Bool),
         ("u8", TypeDef::Int(8, Signedness::Unsigned)),
         ("u16", TypeDef::Int(16, Signedness::Unsigned)),
@@ -25,6 +24,7 @@ fn load_primitives(ctx: &mut Context) {
         ("i64", TypeDef::Int(64, Signedness::Signed)),
         ("f32", TypeDef::Float(32)),
         ("f64", TypeDef::Float(64)),
+        ("c_void", TypeDef::Empty),
     ];
 
     let mut ids = Vec::new();
@@ -44,19 +44,21 @@ fn load_primitives(ctx: &mut Context) {
         ids.push(typeid);
     }
 
+    let nothing = ctx.interner.intern(TypeDef::Empty);
+
     ctx.set_primitives(Primitives {
-        void: ids[0],
-        bool_: ids[1],
-        u8_: ids[2],
-        u16_: ids[3],
-        u32_: ids[4],
-        u64_: ids[5],
-        i8_: ids[6],
-        i16_: ids[7],
-        i32_: ids[8],
-        i64_: ids[9],
-        f32_: ids[10],
-        f64_: ids[11],
+        nothing,
+        bool_: ids[0],
+        u8_: ids[1],
+        u16_: ids[2],
+        u32_: ids[3],
+        u64_: ids[4],
+        i8_: ids[5],
+        i16_: ids[6],
+        i32_: ids[7],
+        i64_: ids[8],
+        f32_: ids[9],
+        f64_: ids[10],
     });
 }
 
@@ -77,33 +79,6 @@ fn main() {
     load_primitives(&mut ctx);
 
     let root = ctx.table.root();
-
-    let u8ptr = ctx.interner.intern(types::defs::TypeDef::Pointer {
-        pointee: ctx.primitives.u8_,
-        mutability: false,
-    });
-
-    let fnptr = ctx.interner.intern(types::defs::TypeDef::FnPointer(
-        types::defs::FnPointerType {
-            params: vec![u8ptr],
-            return_type: ctx.primitives.void,
-        },
-    ));
-
-    let _ = ctx.table.define(
-        root,
-        resolver::symbols::Definition {
-            name: "printf".to_string(),
-            kind: DefKind::Function(FnSig {
-                name: "printf".to_string(),
-                params: vec!["value".to_string()],
-                return_type: ctx.primitives.void,
-                resolved: true,
-                typeid: fnptr,
-                is_extern: true,
-            }),
-        },
-    );
 
     match resolve(&mut ctx, root, &unit) {
         Err(err) => {

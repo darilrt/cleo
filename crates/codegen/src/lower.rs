@@ -1,4 +1,4 @@
-use ast::{ExprValue, Operator};
+use ast::{Literal, Operator};
 use errors::Error;
 use resolver::context;
 use typed_ast::TypedUnit;
@@ -58,12 +58,36 @@ impl<'a> FrameLowerer<'a> {
         temp_name
     }
 
+    pub fn make_temp_if_not_nothing(&mut self, typeid: TypeID) -> Option<String> {
+        if typeid != self.ctx.primitives.nothing {
+            Some(self.make_temp(typeid))
+        } else {
+            None
+        }
+    }
+
     pub fn lower_fn(
         fndecl: typed_ast::FnDecl,
         temps: u32,
         ctx: &context::Context,
     ) -> Result<FnIR, Error> {
-        let (_, block) = FrameLowerer::lower_block(fndecl.block, None, temps, ctx)?;
+        if fndecl.body.is_none() {
+            return Err(format!("expected a function body").into());
+        }
+
+        let body: typed_ast::Block = fndecl.body.unwrap();
+        let is_nothing = body.typeid == ctx.primitives.nothing;
+
+        let (_, block) = FrameLowerer::lower_block(
+            body,
+            if is_nothing {
+                ReturnMethod::None
+            } else {
+                ReturnMethod::Return
+            },
+            temps,
+            ctx,
+        )?;
 
         Ok(FnIR {
             name: fndecl.signature.name.string(),
@@ -74,9 +98,9 @@ impl<'a> FrameLowerer<'a> {
         })
     }
 
-    pub fn lower_block(
+    fn lower_block(
         block: typed_ast::Block,
-        ret_var: Option<String>,
+        return_method: ReturnMethod,
         temps: u32,
         ctx: &context::Context,
     ) -> Result<(u32, BlockIR), Error> {
@@ -92,15 +116,29 @@ impl<'a> FrameLowerer<'a> {
             lowerer.stmts.push(stmt);
         }
 
-        match ret_var {
-            Some(var) => match last {
+        match return_method {
+            ReturnMethod::Var(var) => match last {
                 typed_ast::Stmt::Expr(expr) => {
                     let expr_ir = lowerer.lower_expr(expr)?;
                     lowerer.stmts.push(StmtIR::Assign(var, expr_ir));
                 }
+                typed_ast::Stmt::Break(expr) => {
+                    if let Some(expr) = expr {
+                        let expr_ir = lowerer.lower_expr(expr)?;
+                        lowerer.stmts.push(StmtIR::Assign(var, expr_ir));
+                    }
+                    lowerer.stmts.push(StmtIR::Break);
+                }
                 _ => unimplemented!("stmt"),
             },
-            None => {
+            ReturnMethod::Return => match last {
+                typed_ast::Stmt::Expr(expr) => {
+                    let expr = lowerer.lower_expr(expr)?;
+                    lowerer.stmts.push(StmtIR::Return(Some(expr)));
+                }
+                _ => unimplemented!(),
+            },
+            ReturnMethod::None => {
                 let stmt = lowerer.lower_stmt(last)?;
                 lowerer.stmts.push(stmt);
             }
@@ -119,8 +157,16 @@ impl<'a> FrameLowerer<'a> {
             typed_ast::Stmt::Expr(expr) => Ok(StmtIR::Expr(self.lower_expr(expr)?)),
             typed_ast::Stmt::Local(local) => Ok(self.lower_local(local)?),
             typed_ast::Stmt::Return(expr) => Ok(self.lower_return(expr)?),
-            _ => unimplemented!("stmt"),
+            typed_ast::Stmt::Break(expr) => Ok(self.lower_break(expr)?),
+            _ => unimplemented!("{:?}", stmt),
         }
+    }
+
+    fn lower_break(&mut self, expr: Option<typed_ast::Expr>) -> Result<StmtIR, Error> {
+        if let Some(_expr) = expr {
+            unimplemented!()
+        }
+        Ok(StmtIR::Break)
     }
 
     fn lower_return(&mut self, expr: Option<typed_ast::Expr>) -> Result<StmtIR, Error> {
@@ -146,10 +192,13 @@ impl<'a> FrameLowerer<'a> {
     fn lower_expr(&mut self, expr: typed_ast::Expr) -> Result<ExprIR, Error> {
         match expr {
             typed_ast::Expr::Value(value, _typeid) => Ok(ExprIR::Atom(match value {
-                ExprValue::Bool(b) => b.to_string(),
-                ExprValue::Integer(i) => i.to_string(),
-                ExprValue::Float(f) => f.to_string(),
-                ExprValue::String(s) => s.clone(),
+                Literal::Bool(b) => b.to_string(),
+                Literal::Integer {
+                    value: raw,
+                    suffix: _,
+                } => raw.to_string(),
+                Literal::Float(f) => f.to_string(),
+                Literal::String(s) => s.clone(),
             })),
             typed_ast::Expr::BinaryOp {
                 left,
@@ -173,23 +222,43 @@ impl<'a> FrameLowerer<'a> {
                 typeid: _,
             } => self.lower_unaryop(op, *expr),
             typed_ast::Expr::Access(expr) => self.lower_access(expr),
-            typed_ast::Expr::Reinterpret { inner, typeid } => {
-                self.lower_reinterpret(*inner, typeid)
-            }
+            typed_ast::Expr::Reinterpret { inner, from, to } => self.lower_cast(*inner, from, to),
+            typed_ast::Expr::Loop(block) => self.lower_loop(block),
             _ => unimplemented!("expr {:?}", expr),
         }
     }
 
-    fn lower_reinterpret(
+    fn lower_loop(&mut self, block: typed_ast::Block) -> Result<ExprIR, Error> {
+        let tmp = self.make_temp_if_not_nothing(block.typeid);
+
+        let return_method = tmp
+            .clone()
+            .map_or(ReturnMethod::None, |var| ReturnMethod::Var(var));
+
+        let (temps, block) = FrameLowerer::lower_block(block, return_method, self.temps, self.ctx)?;
+
+        self.temps = temps;
+        self.stmts.push(StmtIR::For(block));
+
+        if let Some(tmp) = tmp {
+            Ok(ExprIR::Atom(tmp))
+        } else {
+            Ok(ExprIR::Empty)
+        }
+    }
+
+    fn lower_cast(
         &mut self,
         inner: typed_ast::Expr,
-        typeid: TypeID,
+        from: TypeID,
+        to: TypeID,
     ) -> Result<ExprIR, Error> {
         let inner = self.lower_expr(inner)?;
 
         Ok(ExprIR::Intrinsic(Intrinsic::Reinterpret {
-            from: Box::new(inner),
-            to: typeid,
+            inner: Box::new(inner),
+            from,
+            to,
         }))
     }
 
@@ -206,7 +275,8 @@ impl<'a> FrameLowerer<'a> {
         Ok(ExprIR::UnaryOp {
             op: match op {
                 Operator::Ref => "&".to_string(),
-                _ => Err(format!("Invalid unary operator"))?,
+                Operator::Deref => "*".to_string(),
+                _ => Err(format!("Invalid unary operator '{:?}'", op))?,
             },
             expr: Box::new(self.lower_expr(expr)?),
         })
@@ -252,7 +322,12 @@ impl<'a> FrameLowerer<'a> {
             Operator::Sub => "-",
             Operator::Mul => "*",
             Operator::Div => "/",
-            _ => unimplemented!(""),
+            Operator::Mod => "%",
+            Operator::Greater => ">",
+            Operator::GreaterEqual => ">=",
+            Operator::Less => "<",
+            Operator::LessEqual => "<=",
+            _ => panic!("unimplemented operator {:?}", op),
         };
 
         Ok(ExprIR::BinaryOp {
@@ -264,15 +339,22 @@ impl<'a> FrameLowerer<'a> {
 
     fn lower_if(&mut self, expr: typed_ast::ExprIf) -> Result<ExprIR, Error> {
         let condition_expr = self.lower_expr(*expr.condition)?;
-        let tmp: String = self.make_temp(expr.then_branch.typeid);
+        let tmp = self.make_temp_if_not_nothing(expr.then_branch.typeid);
+        let return_method = tmp
+            .clone()
+            .map_or(ReturnMethod::None, |var| ReturnMethod::Var(var));
 
-        let (temps, if_block) =
-            FrameLowerer::lower_block(expr.then_branch, Some(tmp.clone()), self.temps, self.ctx)?;
+        let (temps, if_block) = FrameLowerer::lower_block(
+            expr.then_branch,
+            return_method.clone(),
+            self.temps,
+            self.ctx,
+        )?;
 
         let else_block = expr
             .else_branch
             .and_then(|branch| {
-                FrameLowerer::lower_block(branch, Some(tmp.clone()), temps, self.ctx).ok()
+                FrameLowerer::lower_block(branch, return_method, temps, self.ctx).ok()
             })
             .map(|(temps, block)| {
                 self.temps = temps;
@@ -284,7 +366,11 @@ impl<'a> FrameLowerer<'a> {
         self.stmts
             .push(StmtIR::If(condition_expr, if_block, else_block));
 
-        Ok(ExprIR::Atom(tmp))
+        Ok(if let Some(tmp) = tmp {
+            ExprIR::Atom(tmp)
+        } else {
+            ExprIR::Empty
+        })
     }
 }
 
@@ -292,4 +378,11 @@ pub fn lower(unit: TypedUnit, ctx: &context::Context) -> Result<UnitIR, Error> {
     let lowerer = UnitLowerer::new(ctx);
 
     lowerer.lower_unit(unit)
+}
+
+#[derive(Clone)]
+enum ReturnMethod {
+    None,
+    Return,
+    Var(String),
 }

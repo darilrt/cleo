@@ -43,14 +43,7 @@ pub fn gather_decl(
             Decl::Fn(func) => {
                 let def = Definition {
                     name: func.signature.name.name.clone(),
-                    kind: DefKind::Function(FnSig {
-                        name: func.signature.name.name.clone(),
-                        params: Vec::new(),
-                        return_type: TypeID(0),
-                        resolved: false,
-                        typeid: TypeID(0),
-                        is_extern: false,
-                    }),
+                    kind: DefKind::Function(FnSig::unresolved(func.signature.name.str())),
                 };
 
                 let Ok(_) = table.define(scope, def) else {
@@ -81,8 +74,6 @@ pub fn gather_decl(
             }
 
             Decl::Import(_decl) => {}
-
-            Decl::Pub(_decl) => {}
         }
     }
 

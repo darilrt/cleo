@@ -11,15 +11,10 @@ pub fn decl<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, Decl>
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
-    let decls = type_decl()
+    type_decl()
         .map(Decl::Type)
         .or(fn_decl().map(Decl::Fn))
         .or(import_decl().map(Decl::Import))
-        .then_ignore(just(TokenKind::Semicolon).or_not());
-
-    just(TokenKind::Pub)
-        .ignore_then(decls.clone())
-        .map(|d| Decl::Pub(Box::new(d)))
-        .or(decls)
+        .then_ignore(just(TokenKind::Semicolon).or_not())
         .boxed()
 }

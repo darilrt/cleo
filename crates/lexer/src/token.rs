@@ -41,24 +41,15 @@ pub enum TokenKind<'a> {
     Ident(&'a str),
 
     // Keywords
-    /// Keyword `fn` to declare a function.
-    #[token("fn")]
-    Fn,
-    /// Keyword `var` to declare a mutable variable.
-    #[token("var")]
-    Var,
+    /// Keyword `proc` to declare a function.
+    #[token("proc")]
+    Proc,
     /// Keyword `if` for conditional branching.
     #[token("if")]
     If,
     /// Keyword `else` for conditional alternative.
     #[token("else")]
     Else,
-    /// Keyword `while` for loop condition.
-    #[token("while")]
-    While,
-    /// Keyword `for` for iteration.
-    #[token("for")]
-    For,
     /// Keyword `loop` for infinite loops.
     #[token("loop")]
     Loop,
@@ -71,6 +62,9 @@ pub enum TokenKind<'a> {
     /// Keyword `enum` to define an enumeration type.
     #[token("enum")]
     Enum,
+    /// Keyword `union` to define an tagged union type.
+    #[token("union")]
+    Union,
     /// Keyword `const` to declare a constant.
     #[token("const")]
     Const,
@@ -83,12 +77,9 @@ pub enum TokenKind<'a> {
     /// Keyword `type` for type aliases.
     #[token("type")]
     Type,
-    /// Keyword `null` for null value.
-    #[token("null")]
-    Null,
-    /// Keyword `trait` to define a trait interface.
-    #[token("trait")]
-    Trait,
+    /// Keyword `require`.
+    #[token("require")]
+    Require,
     /// Keyword `match` for pattern matching.
     #[token("match")]
     Match,
@@ -98,12 +89,12 @@ pub enum TokenKind<'a> {
     /// Keyword `defer` to schedule code execution at scope exit.
     #[token("defer")]
     Defer,
-    /// Keyword `pub` to mark items as public.
-    #[token("pub")]
-    Pub,
     /// Keyword `self` — the current instance. Only valid as the first parameter of a function.
     #[token("self")]
     SelfKw,
+    // Keyword for `Self` type
+    #[token("Self")]
+    SelfTy,
 
     // Literals
     /// Integer literal with optional suffix (decimal, hex, binary, octal).
@@ -319,11 +310,11 @@ mod test {
     fn test_lexer() {
         let source = "
         // This is a comment
-        fn print(self: *Name) for Printable {
+        proc print(self: *Name) for Printable {
             println(\"Name: %s %s\", self->first, self->last)
         }
 
-        fn func1(self: *Name) for TwoFunctions {
+        proc func1(self: *Name) for TwoFunctions {
             println(\"Function 1 called for %s %s\", self->first, self->last)
         }
         ";

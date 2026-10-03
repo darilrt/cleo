@@ -47,7 +47,7 @@ pub enum Stmt {
     Expr(Expr),
     Defer(Expr),
     Return(Option<Expr>),
-    Break,
+    Break(Option<Expr>),
     Continue,
     Local(Local),
     Extern(FnSignature),
@@ -68,7 +68,7 @@ pub enum Binding {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    Value(ast::ExprValue, TypeID),
+    Value(ast::Literal, TypeID),
     BinaryOp {
         left: Box<Expr>,
         op: Operator,
@@ -82,7 +82,8 @@ pub enum Expr {
     },
     Reinterpret {
         inner: Box<Expr>,
-        typeid: TypeID,
+        from: TypeID,
+        to: TypeID,
     },
     Call(ExprCall),
     Access(ExprAccess),
@@ -107,11 +108,15 @@ impl Expr {
             Expr::Access(access) => access.typeid,
             Expr::If(if_expr) => if_expr.then_branch.typeid,
             Expr::Path(path) => path.typeid,
-            Expr::Reinterpret { inner: _, typeid } => *typeid,
+            Expr::Reinterpret {
+                inner: _,
+                from: _,
+                to,
+            } => *to,
+            Expr::Assign(assign) => assign.right.type_id(),
+            Expr::Loop(block) => block.typeid,
+            _ => unimplemented!("{:?}", self),
             // Expr::Init(init) => init.path.segments.last().unwrap().name.type_id,
-            // Expr::Assign(assign) => assign.right.type_id(),
-            // Expr::Loop(block) => block.typeid,
-            _ => unimplemented!(),
         }
     }
 }
@@ -160,7 +165,7 @@ pub struct ExprCall {
 pub struct FnDecl {
     pub no_emit: bool,
     pub signature: FnSignature,
-    pub block: Block,
+    pub body: Option<Block>,
     pub scopeid: ScopeID,
     pub typeid: TypeID,
     pub defid: DefID,

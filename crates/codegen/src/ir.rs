@@ -36,6 +36,8 @@ pub enum StmtIR {
     Assign(String, ExprIR),
     If(ExprIR, BlockIR, Option<BlockIR>),
     Return(Option<ExprIR>),
+    For(BlockIR),
+    Break,
 }
 
 #[derive(Debug)]
@@ -63,12 +65,17 @@ pub enum ExprIR {
         segment: String,
     },
     Atom(String),
+    Empty,
     Intrinsic(Intrinsic),
 }
 
 #[derive(Debug)]
 pub enum Intrinsic {
-    Reinterpret { from: Box<ExprIR>, to: TypeID },
+    Reinterpret {
+        inner: Box<ExprIR>,
+        from: TypeID,
+        to: TypeID,
+    },
 }
 
 #[derive(Debug)]

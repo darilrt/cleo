@@ -43,4 +43,19 @@ pub struct FnSig {
     pub return_type: TypeID,
     pub resolved: bool,
     pub is_extern: bool,
+    pub no_emit: bool,
+}
+
+impl FnSig {
+    pub fn unresolved(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            params: Vec::new(),
+            return_type: TypeID(0),
+            resolved: false,
+            typeid: TypeID(0),
+            is_extern: false,
+            no_emit: false,
+        }
+    }
 }

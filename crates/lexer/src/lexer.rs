@@ -66,6 +66,7 @@ pub fn lex<'a>(src: &'a str) -> Result<Vec<Token<'a>>, LexerError> {
                         | TokenKind::RightParen
                         | TokenKind::RightBrace
                         | TokenKind::RightBracket
+                        | TokenKind::NewLine
                 ) {
                     continue;
                 }

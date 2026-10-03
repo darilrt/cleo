@@ -45,12 +45,18 @@ mod test {
             },
             GenericParam {
                 name: Ident::new("U"),
-                bound: Some(Type::ConstPtr(Box::new(Type::Path(PathExpr {
-                    segments: vec![Segment {
-                        name: Ident::new("i32"),
-                        generics: None,
-                    }],
-                })))),
+                bound: Some(Type::Ptr(
+                    false,
+                    Box::new(Type::Path(
+                        true,
+                        PathExpr {
+                            segments: vec![Segment {
+                                name: Ident::new("i32"),
+                                generics: None,
+                            }],
+                        },
+                    )),
+                )),
             },
             GenericParam {
                 name: Ident::new("V"),

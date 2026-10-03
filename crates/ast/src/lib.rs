@@ -8,7 +8,6 @@ pub enum Decl {
     Fn(FnDecl),
     Type(TypeDecl),
     Import(ImportDecl),
-    Pub(Box<Decl>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,10 +43,9 @@ pub struct ImportDecl {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
-    Ptr(Box<Type>),
-    ConstPtr(Box<Type>),
-    Path(PathExpr),
-    Array(usize, Box<Type>),
+    Path(bool, PathExpr),
+    Ptr(bool, Box<Type>),
+    Array(bool, usize, Box<Type>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -123,7 +121,7 @@ pub enum Binding {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    Value(ExprValue),
+    Value(Literal),
     BinaryOp {
         left: Box<Expr>,
         op: Operator,
@@ -178,11 +176,26 @@ pub struct ExprIf {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprValue {
-    Integer(String),
+pub enum Literal {
+    Integer {
+        value: u128,
+        suffix: Option<IntegerSuffix>,
+    },
     Float(String),
     Bool(bool),
     String(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum IntegerSuffix {
+    U8,
+    U16,
+    U32,
+    U64,
+    I8,
+    I16,
+    I32,
+    I64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -203,6 +216,7 @@ pub enum Operator {
     Sub, // -
     Mul, // *
     Div, // /
+    Mod, // %
 
     Deref, // *
     Ref,   // &
@@ -227,6 +241,7 @@ impl Operator {
             Operator::Div => "divide",
             Operator::Sub => "subtract",
             Operator::Mul => "divde",
+            Operator::Mod => "module",
             Operator::And
             | Operator::Greater
             | Operator::Equal

@@ -140,14 +140,17 @@ mod test {
                 assert_eq!(generics.len(), 1);
                 assert_eq!(
                     generics[0],
-                    Type::Path(PathExpr {
-                        segments: vec![Segment {
-                            name: Ident {
-                                name: "i32".to_string(),
-                            },
-                            generics: None,
-                        }]
-                    })
+                    Type::Path(
+                        false,
+                        PathExpr {
+                            segments: vec![Segment {
+                                name: Ident {
+                                    name: "i32".to_string(),
+                                },
+                                generics: None,
+                            }]
+                        }
+                    )
                 );
                 assert_eq!(segments[2].name.name, "method".to_string());
                 assert!(segments[2].generics.is_some());

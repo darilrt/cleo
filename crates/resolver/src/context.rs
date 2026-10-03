@@ -36,17 +36,27 @@ impl Context {
             return true;
         }
 
+        if let Some(TypeDef::Const(inner)) = self.interner.get(to) {
+            if self.is_coercible(from, *inner) {
+                return true;
+            }
+        }
+
         match (self.interner.get(from), self.interner.get(to)) {
-            (
-                Some(TypeDef::Pointer {
-                    pointee: a,
-                    mutability: true,
-                }),
-                Some(TypeDef::Pointer {
-                    pointee: b,
-                    mutability: false,
-                }),
-            ) => a == b,
+            (Some(TypeDef::Int(fw, fs)), Some(TypeDef::Int(tw, ts))) if fs == ts && fw < tw => true,
+            (Some(TypeDef::Float(fw)), Some(TypeDef::Float(tw))) if fw < tw => true,
+            (Some(TypeDef::Pointer { pointee: fp }), Some(TypeDef::Pointer { pointee: tp })) => {
+                if fp == tp {
+                    return true;
+                }
+                if let Some(TypeDef::Const(inner)) = self.interner.get(*tp) {
+                    if self.is_coercible(*fp, *inner) {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
             _ => false,
         }
     }
@@ -57,35 +67,37 @@ impl Context {
 
     pub fn resolve_id(&mut self, scope: ScopeID, ast: &Type) -> Result<TypeID, String> {
         match ast {
-            Type::Ptr(node) => {
+            Type::Ptr(is_const, node) => {
                 let pointee = self.resolve_id(scope, node)?;
-                Ok(self.interner.intern(TypeDef::Pointer {
-                    pointee,
-                    mutability: true,
-                }))
+                let typeid = self.interner.intern(TypeDef::Pointer { pointee });
+
+                if *is_const {
+                    Ok(self.interner.intern(TypeDef::Const(typeid)))
+                } else {
+                    Ok(typeid)
+                }
             }
-            Type::ConstPtr(node) => {
-                let pointee = self.resolve_id(scope, node)?;
-                Ok(self.interner.intern(TypeDef::Pointer {
-                    pointee,
-                    mutability: false,
-                }))
-            }
-            Type::Array(size, node) => {
+            Type::Array(is_const, size, node) => {
                 let element = self.resolve_id(scope, node)?;
-                Ok(self.interner.intern(TypeDef::Array {
+                let typeid = self.interner.intern(TypeDef::Array {
                     element,
                     size: *size,
-                }))
+                });
+
+                if *is_const {
+                    Ok(self.interner.intern(TypeDef::Const(typeid)))
+                } else {
+                    Ok(typeid)
+                }
             }
-            Type::Path(expr) => {
+            Type::Path(is_const, expr) => {
                 if expr.segments.len() == 0 {
                     panic!("Empty path in type_to_def");
                 }
 
                 let mut it = expr.segments.iter();
 
-                let ty = {
+                let typeid = {
                     let mut last_def: Option<&Definition> = None;
 
                     loop {
@@ -145,7 +157,11 @@ impl Context {
                     }
                 };
 
-                Ok(ty)
+                if *is_const {
+                    Ok(self.interner.intern(TypeDef::Const(typeid)))
+                } else {
+                    Ok(typeid)
+                }
             }
         }
     }
@@ -156,6 +172,10 @@ impl Context {
         };
 
         match def {
+            TypeDef::Const(inner) => {
+                let inner_name = self.type_name(*inner);
+                format!("const {}", inner_name)
+            }
             TypeDef::Int(n, s) => format!(
                 "{}{}",
                 match s {
@@ -166,21 +186,14 @@ impl Context {
             ),
             TypeDef::Float(n) => format!("f{}", n),
             TypeDef::Bool => "bool".to_string(),
-            TypeDef::Void => "void".to_string(),
+            TypeDef::Empty => "void".to_string(),
             TypeDef::Array { element, size } => {
                 let element_name = self.type_name(*element);
                 format!("[{}]{}", size, element_name)
             }
-            TypeDef::Pointer {
-                pointee,
-                mutability,
-            } => {
+            TypeDef::Pointer { pointee } => {
                 let pointee_name = self.type_name(*pointee);
-                format!(
-                    "*{}{}",
-                    if *mutability { "" } else { "const " },
-                    pointee_name
-                )
+                format!("*{}", pointee_name)
             }
             TypeDef::UserDef(id) => self
                 .table
@@ -230,7 +243,7 @@ impl Context {
 
 #[derive(Debug, Clone, Default)]
 pub struct Primitives {
-    pub void: TypeID,
+    pub nothing: TypeID,
     pub bool_: TypeID,
     pub u8_: TypeID,
     pub u16_: TypeID,
@@ -279,7 +292,6 @@ impl Primitives {
 
     pub fn c_name(&self, ty: TypeID) -> Option<&'static str> {
         Some(match ty {
-            t if t == self.void => "void",
             t if t == self.bool_ => "bool",
             t if t == self.i8_ => "int8_t",
             t if t == self.i16_ => "int16_t",
@@ -330,7 +342,7 @@ mod test {
         let structty = ctx.interner.intern(TypeDef::UserDef(struct_defid));
 
         let boolty = ctx.interner.intern(TypeDef::Bool);
-        let voidty = ctx.interner.intern(TypeDef::Void);
+        let voidty = ctx.interner.intern(TypeDef::Empty);
         let i32ty = ctx.interner.intern(TypeDef::Int(32, Signedness::Signed));
         let u32ty = ctx.interner.intern(TypeDef::Int(32, Signedness::Unsigned));
         let f32ty = ctx.interner.intern(TypeDef::Float(32));
@@ -338,10 +350,8 @@ mod test {
             element: structty,
             size: 10,
         });
-        let ptrty = ctx.interner.intern(TypeDef::Pointer {
-            pointee: arrayty,
-            mutability: false,
-        });
+        let arrayty = ctx.interner.intern(TypeDef::Const(arrayty));
+        let ptrty = ctx.interner.intern(TypeDef::Pointer { pointee: arrayty });
         let fnty = ctx.interner.intern(TypeDef::FnPointer(FnPointerType {
             params: vec![boolty, voidty, u32ty, f32ty, ptrty],
             return_type: i32ty,

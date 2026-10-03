@@ -37,7 +37,6 @@ impl<'a> Resolver<'a> {
     pub fn resolve_decl(&mut self, scope: ScopeID, decl: &Decl) -> Result<(), Error> {
         match decl {
             Decl::Fn(decl) => self.resolve_fn(scope, decl),
-            Decl::Pub(decl) => self.resolve_decl(scope, decl),
             Decl::Type(decl) => self.resolve_type(scope, decl),
             Decl::Import(_) => Ok(()),
         }
@@ -58,7 +57,7 @@ impl<'a> Resolver<'a> {
             let fn_name = decl.signature.name.str();
             let ret_typeid = match &decl.signature.return_type {
                 Some(ty) => self.ctx.resolve_id(scope, ty)?,
-                None => self.ctx.interner.intern(TypeDef::Void),
+                None => self.ctx.primitives.nothing,
             };
 
             let defid = self
@@ -91,6 +90,8 @@ impl<'a> Resolver<'a> {
             def.return_type = ret_typeid;
             def.resolved = true;
             def.typeid = typeid;
+
+            def.no_emit = decl.has_attr("no_emit");
         }
 
         Ok(())

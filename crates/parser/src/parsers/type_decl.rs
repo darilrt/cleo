@@ -39,11 +39,11 @@ where
             .delimited_by(just(TokenKind::LeftBrace), just(TokenKind::RightBrace)),
     );
 
-    let trait_method = just(TokenKind::Fn)
+    let trait_method = just(TokenKind::Proc)
         .ignore_then(fn_signature())
         .map(|signature| TraitMethod { signature });
 
-    let trait_decl = just(TokenKind::Trait).ignore_then(
+    let trait_decl = just(TokenKind::Require).ignore_then(
         trait_method
             .separated_by(just(TokenKind::Semicolon))
             .allow_trailing()
@@ -137,12 +137,15 @@ mod test {
                             name: Ident::new("size"),
                             generics: None,
                             params: vec![],
-                            return_type: Some(Type::Path(PathExpr {
-                                segments: vec![Segment {
-                                    name: Ident::new("i32"),
-                                    generics: None,
-                                },],
-                            },)),
+                            return_type: Some(Type::Path(
+                                false,
+                                PathExpr {
+                                    segments: vec![Segment {
+                                        name: Ident::new("i32"),
+                                        generics: None,
+                                    },],
+                                },
+                            )),
                         },
                     }
                 ],),
@@ -164,17 +167,23 @@ mod test {
             TypeDecl {
                 name: Ident::new("Alias"),
                 generics: None,
-                body: TypeBody::Alias(Type::Path(PathExpr {
-                    segments: vec![Segment {
-                        name: Ident::new("Point"),
-                        generics: Some(vec![Type::Path(PathExpr {
-                            segments: vec![Segment {
-                                name: Ident::new("Int"),
-                                generics: None,
-                            },],
-                        },),],),
-                    },],
-                },),),
+                body: TypeBody::Alias(Type::Path(
+                    false,
+                    PathExpr {
+                        segments: vec![Segment {
+                            name: Ident::new("Point"),
+                            generics: Some(vec![Type::Path(
+                                false,
+                                PathExpr {
+                                    segments: vec![Segment {
+                                        name: Ident::new("Int"),
+                                        generics: None,
+                                    },],
+                                },
+                            ),],),
+                        },],
+                    },
+                ),),
             }
         );
     }
@@ -204,21 +213,27 @@ mod test {
                 body: TypeBody::Struct(vec![
                     StructField {
                         name: Ident::new("x"),
-                        field_type: Type::Path(PathExpr {
-                            segments: vec![Segment {
-                                name: Ident::new("Int"),
-                                generics: None,
-                            },],
-                        },),
+                        field_type: Type::Path(
+                            false,
+                            PathExpr {
+                                segments: vec![Segment {
+                                    name: Ident::new("Int"),
+                                    generics: None,
+                                },],
+                            },
+                        ),
                     },
                     StructField {
                         name: Ident::new("y"),
-                        field_type: Type::Path(PathExpr {
-                            segments: vec![Segment {
-                                name: Ident::new("Int"),
-                                generics: None,
-                            },],
-                        },),
+                        field_type: Type::Path(
+                            false,
+                            PathExpr {
+                                segments: vec![Segment {
+                                    name: Ident::new("Int"),
+                                    generics: None,
+                                },],
+                            },
+                        ),
                     },
                 ],),
             }

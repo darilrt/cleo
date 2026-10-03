@@ -3,13 +3,13 @@ use crate::{DefID, TypeID};
 #[derive(Clone, PartialEq, Hash, Eq, Debug)]
 pub enum TypeDef {
     Bool,
-    Void,
+    Empty,
     Int(u8, Signedness),
     Float(u8),
     UserDef(DefID),
-
+    Const(TypeID),
     FnPointer(FnPointerType),
-    Pointer { pointee: TypeID, mutability: bool },
+    Pointer { pointee: TypeID },
     Array { element: TypeID, size: usize },
 }
 

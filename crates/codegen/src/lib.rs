@@ -25,6 +25,7 @@ pub fn generate(
 
     writeln!(buffer, "#include <stdint.h>")?;
     writeln!(buffer, "#include <stdio.h>\n")?;
+    writeln!(buffer, "#include <stdlib.h>\n")?;
     codegen.emit_header(buffer, scope)?;
 
     for fnir in ir.fns() {

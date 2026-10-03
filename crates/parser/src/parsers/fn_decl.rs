@@ -94,7 +94,7 @@ where
 {
     attributes()
         .then(
-            just(TokenKind::Fn)
+            just(TokenKind::Proc)
                 .ignore_then(fn_signature())
                 .then(block().or_not()),
         )
@@ -134,14 +134,17 @@ mod test {
                             name: Ident {
                                 name: "T".to_string()
                             },
-                            bound: Some(Type::Path(PathExpr {
-                                segments: vec![Segment {
-                                    name: Ident {
-                                        name: "int".to_string()
-                                    },
-                                    generics: None,
-                                }]
-                            })),
+                            bound: Some(Type::Path(
+                                false,
+                                PathExpr {
+                                    segments: vec![Segment {
+                                        name: Ident {
+                                            name: "int".to_string()
+                                        },
+                                        generics: None,
+                                    }]
+                                }
+                            )),
                         },
                         GenericParam {
                             name: Ident {
@@ -155,37 +158,46 @@ mod test {
                             name: Ident {
                                 name: "x".to_string()
                             },
-                            ty: Type::Path(PathExpr {
-                                segments: vec![Segment {
-                                    name: Ident {
-                                        name: "int".to_string()
-                                    },
-                                    generics: None,
-                                }]
-                            }),
+                            ty: Type::Path(
+                                false,
+                                PathExpr {
+                                    segments: vec![Segment {
+                                        name: Ident {
+                                            name: "int".to_string()
+                                        },
+                                        generics: None,
+                                    }]
+                                }
+                            ),
                         },
                         FnParam {
                             name: Ident {
                                 name: "y".to_string()
                             },
-                            ty: Type::Path(PathExpr {
-                                segments: vec![Segment {
-                                    name: Ident {
-                                        name: "U".to_string()
-                                    },
-                                    generics: None,
-                                }]
-                            }),
+                            ty: Type::Path(
+                                false,
+                                PathExpr {
+                                    segments: vec![Segment {
+                                        name: Ident {
+                                            name: "U".to_string()
+                                        },
+                                        generics: None,
+                                    }]
+                                }
+                            ),
                         },
                     ],
-                    return_type: Some(Type::Path(PathExpr {
-                        segments: vec![Segment {
-                            name: Ident {
-                                name: "int".to_string()
-                            },
-                            generics: None,
-                        }]
-                    })),
+                    return_type: Some(Type::Path(
+                        false,
+                        PathExpr {
+                            segments: vec![Segment {
+                                name: Ident {
+                                    name: "int".to_string()
+                                },
+                                generics: None,
+                            }]
+                        }
+                    )),
                 },
                 block: Some(Block { statements: vec![] }),
                 attrs: Vec::new(),

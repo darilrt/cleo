@@ -82,7 +82,7 @@ impl<'a> Codegen<'a> {
 
             match &def.kind {
                 DefKind::Function(fnsig) => {
-                    if fnsig.is_extern {
+                    if fnsig.no_emit {
                         continue;
                     }
                     self.emit_fn_sig(buffer, fnsig)?;
@@ -109,7 +109,10 @@ impl<'a> Codegen<'a> {
             _ => unreachable!("Expected a function pointer"),
         };
 
-        for (name, typeid) in fnsig.params.iter().zip(&fntype.params) {
+        for (i, (name, typeid)) in fnsig.params.iter().zip(&fntype.params).enumerate() {
+            if i > 0 {
+                write!(buffer, ", ")?;
+            }
             emit_type(self.ctx, buffer, *typeid, name)?;
         }
 
@@ -159,18 +162,16 @@ pub fn emit_type<'a>(
     }
 
     match type_def {
-        TypeDef::Void => write!(buffer, "void {}", ident),
+        TypeDef::Const(inner) => {
+            emit_type(ctx, buffer, *inner, "")?;
+            write!(buffer, "const {}", ident)
+        }
+        TypeDef::Empty => write!(buffer, "void {}", ident),
         TypeDef::Bool => write!(buffer, "bool {}", ident),
         TypeDef::Int(size, sign) => write!(buffer, "{}{} {}", sign.to_prefix(), size, ident),
         TypeDef::Float(size) => write!(buffer, "f{} {}", size, ident),
-        TypeDef::Pointer {
-            pointee,
-            mutability,
-        } => {
+        TypeDef::Pointer { pointee } => {
             emit_type(ctx, buffer, *pointee, "")?;
-            if !*mutability {
-                write!(buffer, "const ")?;
-            }
             write!(buffer, "* {}", ident)
         }
         TypeDef::Array { element, size } => {

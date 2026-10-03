@@ -15,24 +15,19 @@ pub fn local_impl<'tokens, 'src: 'tokens, I>(
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
-    let binding = chumsky::select! {
-        TokenKind::Var => Binding::Var,
-        TokenKind::Const => Binding::Const,
-    };
-
-    let local_type = just(TokenKind::Colon).ignore_then(type_parser!()).or_not();
+    let local_type = type_parser!().or_not();
 
     let local_init = just(TokenKind::Equal)
         .ignore_then(expr)
         .or_not()
         .map(|e| e.map(Box::new));
 
-    binding
-        .then(ident())
+    ident()
+        .then_ignore(just(TokenKind::Colon))
         .then(local_type)
         .then(local_init)
-        .map(|(((binding, name), var_type), initializer)| Local {
-            binding,
+        .map(|((name, var_type), initializer)| Local {
+            binding: Binding::Var,
             name,
             var_type,
             initializer,
@@ -48,32 +43,3 @@ where
 }
 
 test_parser!(local() => Local);
-
-mod test {
-
-    #[test]
-    fn test_local_decl() {
-        use super::*;
-        use crate::unwrap_or_report;
-        use ast::{ExprValue, Ident, PathExpr, Segment, Type};
-
-        let source = "var x: i32 = 42";
-
-        let result = test_parse(source);
-
-        assert_eq!(
-            unwrap_or_report!(result, source),
-            Local {
-                binding: Binding::Var,
-                name: Ident::new("x"),
-                var_type: Some(Type::Path(PathExpr {
-                    segments: vec![Segment {
-                        name: Ident::new("i32"),
-                        generics: None,
-                    }],
-                })),
-                initializer: Some(Box::new(Expr::Value(ExprValue::Integer("42".to_string())))),
-            }
-        );
-    }
-}
