@@ -5,16 +5,21 @@ edition = "2024"
 
 [workspace]
 members = [
+    "crates/ast",
     "crates/codegen",
     "crates/errors",
     "crates/lexer",
     "crates/parser",
     "crates/resolver",
     "crates/types",
-    "crates/codegen", "crates/ast", "crates/typed_ast",
+    "crates/typed_ast",
+    "crates/project",
 ]
 
 [dependencies]
+project = { path = "./crates/project" }
+errors = { path = "./crates/errors" }
+ast = { path = "./crates/ast" }
 parser = { path = "./crates/parser" }
 resolver = { path = "./crates/resolver" }
 types = { path = "./crates/types" }

@@ -7,11 +7,13 @@ use types::{
 use crate::{
     methos::MethodTable,
     symbols::{DefKind, Definition, SymbolTable},
+    unit::UnitRegistry,
 };
 
 pub struct Context {
     pub interner: TypeInterner,
     pub table: SymbolTable,
+    pub units: UnitRegistry,
     pub methods: MethodTable,
     pub primitives: Primitives,
 }
@@ -22,6 +24,7 @@ impl Context {
             interner: TypeInterner::new(),
             table: SymbolTable::new(),
             methods: MethodTable::new(),
+            units: UnitRegistry::new(),
             primitives,
         }
     }

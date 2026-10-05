@@ -1,66 +1,4 @@
-use parser::unwrap_or_report_file;
-use resolver::{
-    check,
-    context::{Context, Primitives},
-    defkinds::TypeAliasDef,
-    resolve,
-    symbols::DefKind,
-};
-
-fn load_primitives(ctx: &mut Context) {
-    use types::defs::{Signedness, TypeDef};
-
-    let root = ctx.table.root();
-
-    let entries = [
-        ("bool", TypeDef::Bool),
-        ("u8", TypeDef::Int(8, Signedness::Unsigned)),
-        ("u16", TypeDef::Int(16, Signedness::Unsigned)),
-        ("u32", TypeDef::Int(32, Signedness::Unsigned)),
-        ("u64", TypeDef::Int(64, Signedness::Unsigned)),
-        ("i8", TypeDef::Int(8, Signedness::Signed)),
-        ("i16", TypeDef::Int(16, Signedness::Signed)),
-        ("i32", TypeDef::Int(32, Signedness::Signed)),
-        ("i64", TypeDef::Int(64, Signedness::Signed)),
-        ("f32", TypeDef::Float(32)),
-        ("f64", TypeDef::Float(64)),
-        ("c_void", TypeDef::Empty),
-    ];
-
-    let mut ids = Vec::new();
-
-    for (name, ty) in entries {
-        let typeid = ctx.interner.intern(ty);
-
-        let def = resolver::symbols::Definition {
-            name: name.to_string(),
-            kind: DefKind::TypeAlias(TypeAliasDef {
-                resolved: true,
-                typeid,
-            }),
-        };
-
-        ctx.table.define(root, def).unwrap();
-        ids.push(typeid);
-    }
-
-    let nothing = ctx.interner.intern(TypeDef::Empty);
-
-    ctx.set_primitives(Primitives {
-        nothing,
-        bool_: ids[0],
-        u8_: ids[1],
-        u16_: ids[2],
-        u32_: ids[3],
-        u64_: ids[4],
-        i8_: ids[5],
-        i16_: ids[6],
-        i32_: ids[7],
-        i64_: ids[8],
-        f32_: ids[9],
-        f64_: ids[10],
-    });
-}
+mod compile;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -70,38 +8,8 @@ fn main() {
         std::process::exit(1);
     }
 
-    let source_file = &args[1];
-    let source = std::fs::read_to_string(source_file).expect("Failed to read source file");
-    let unit = unwrap_or_report_file!(parser::parse(&source), source_file, &source);
-
-    let mut ctx = Context::new(Primitives::default());
-
-    load_primitives(&mut ctx);
-
-    let root = ctx.table.root();
-
-    match resolve(&mut ctx, root, &unit) {
-        Err(err) => {
-            println!("Resolve error: {:?}", err);
-            return;
-        }
-        Ok(_) => {}
-    }
-
-    let unit = check(&mut ctx, root, unit).expect("Check error: ");
-
-    let mut output = Vec::new();
-
-    if let Err(err) = codegen::generate(&mut ctx, &mut output, root, unit) {
-        println!("Codegen error: {:?}", err);
-        return;
-    }
-    let result = std::str::from_utf8(&output).unwrap();
-    println!("{}", result);
-
-    // print_side_by_side(&source, result);
-
-    // println!("{}", ctx.debug(types::ScopeID(0), false));
+    let path = std::path::Path::new(&args[1]);
+    compile::compile(path);
 }
 
 fn _print_side_by_side(src: &str, result: &str) {

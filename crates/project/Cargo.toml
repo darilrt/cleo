@@ -1,0 +1,12 @@
+[package]
+name = "project"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+errors = { path = "../errors" }
+ast = { path = "../ast" }
+parser = { path = "../parser" }
+resolver = { path = "../resolver" }
+types = { path = "../types" }
+codegen = { path = "../codegen" }

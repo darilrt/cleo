@@ -1,11 +1,11 @@
 use chumsky::{IterParser, Parser, input::ValueInput, prelude::end, span::SimpleSpan};
 use lexer::TokenKind;
 
-use ast::Unit;
+use ast::Root;
 
 use crate::{errors::BoxedParser, parsers::decl::decl};
 
-pub fn unit<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, Unit>
+pub fn unit<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, Root>
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
@@ -13,6 +13,6 @@ where
         .repeated()
         .collect()
         .then_ignore(end())
-        .map(|decls| Unit { decls })
+        .map(|decls| Root { decls })
         .boxed()
 }

@@ -1,6 +1,6 @@
 use ast::{
     Block, Decl, Expr, ExprAccess, ExprAssign, ExprCall, ExprIf, FnDecl, IntegerSuffix, Literal,
-    Local, Operator, PathExpr, Segment, Stmt, Unit,
+    Local, Operator, PathExpr, Root, Segment, Stmt,
 };
 use errors::Error;
 use typed_ast::TypedUnit;
@@ -38,7 +38,7 @@ impl<'a> Checker<'a> {
         Self { ctx }
     }
 
-    pub fn check(&mut self, scope: ScopeID, unit: Unit) -> Result<TypedUnit, Error> {
+    pub fn check(&mut self, scope: ScopeID, unit: Root) -> Result<TypedUnit, Error> {
         let mut out = TypedUnit { decls: Vec::new() };
 
         for decl in unit.decls {

@@ -1,4 +1,4 @@
-use ast::{Decl, FnDecl, TypeBody, TypeDecl, Unit};
+use ast::{Decl, FnDecl, Root, TypeBody, TypeDecl};
 use errors::Error;
 use types::{
     ScopeID,
@@ -21,13 +21,13 @@ impl<'a> Resolver<'a> {
         Self { ctx }
     }
 
-    pub fn resolve(&mut self, scope: ScopeID, unit: &Unit) -> Result<(), Error> {
+    pub fn resolve(&mut self, scope: ScopeID, unit: &Root) -> Result<(), Error> {
         gather(unit, scope, &mut self.ctx.table, &mut self.ctx.interner)?;
         self.resolve_unit(unit, scope)?;
         Ok(())
     }
 
-    pub fn resolve_unit(&mut self, unit: &Unit, scope: ScopeID) -> Result<(), Error> {
+    pub fn resolve_unit(&mut self, unit: &Root, scope: ScopeID) -> Result<(), Error> {
         for def in &unit.decls {
             self.resolve_decl(scope, def)?;
         }

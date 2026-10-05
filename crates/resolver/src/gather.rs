@@ -1,4 +1,4 @@
-use ast::{Decl, TypeBody, TypeDecl, Unit};
+use ast::{Decl, Root, TypeBody, TypeDecl};
 use types::{ScopeID, TypeID, TypeInterner, defs::TypeDef};
 
 use crate::{
@@ -81,7 +81,7 @@ pub fn gather_decl(
 }
 
 pub fn gather(
-    ast: &Unit,
+    ast: &Root,
     scope: ScopeID,
     table: &mut SymbolTable,
     interner: &mut TypeInterner,

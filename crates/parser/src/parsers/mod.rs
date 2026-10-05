@@ -1,4 +1,4 @@
-use ast::Unit;
+use ast::Root;
 use chumsky::{
     Parser,
     input::Input,
@@ -24,7 +24,7 @@ mod stmt;
 mod type_decl;
 mod unit;
 
-pub fn parse<'a>(source: &'a str) -> errors::Result<'a, Unit> {
+pub fn parse<'a>(source: &'a str) -> errors::Result<'a, Root> {
     use lexer::lex;
 
     let lexed = lex(source)?;
