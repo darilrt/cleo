@@ -57,7 +57,7 @@ pub enum DefKind {
     Trait(TraitDef),
     Enum(EnumDef),
     Function(FnSig),
-    Module { scope: ScopeID },
+    Unit { scope: ScopeID },
 }
 
 impl SymbolTable {

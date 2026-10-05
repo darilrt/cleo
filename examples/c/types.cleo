@@ -1,0 +1,4 @@
+
+@extern
+@no_emit
+proc printf(s: *const u8)

@@ -1,5 +1,5 @@
 import c.types
 
-proc main() types.int {
-
+proc main() {
+    types.printf(cast[*u8](&"Hello, World!"))
 }

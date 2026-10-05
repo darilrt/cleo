@@ -813,7 +813,7 @@ impl<'a> Checker<'a> {
             DefKind::Enum(e) => Resolved::Type(e.typeid, defid),
             DefKind::Trait(t) => Resolved::Type(t.typeid, defid),
             DefKind::TypeAlias(a) => Resolved::Type(a.typeid, defid),
-            DefKind::Module { scope } => Resolved::Module(*scope),
+            DefKind::Unit { scope } => Resolved::Module(*scope),
         }
     }
 

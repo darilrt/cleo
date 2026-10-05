@@ -1,36 +1,8 @@
 pub mod blockemitter;
-pub mod codegen;
+mod codegen;
 pub mod ir;
 
 mod lower;
 
+pub use codegen::Codegen;
 pub use lower::lower;
-
-use std::io;
-
-use errors::Error;
-use resolver::context;
-use typed_ast::TypedUnit;
-use types::ScopeID;
-
-pub fn generate(
-    ctx: &context::Context,
-    buffer: &mut impl io::Write,
-    scope: ScopeID,
-    unit: TypedUnit,
-) -> Result<(), Error> {
-    let ir = lower(unit, ctx)?;
-
-    let codegen = codegen::Codegen::new(ctx);
-
-    writeln!(buffer, "#include <stdint.h>")?;
-    writeln!(buffer, "#include <stdio.h>\n")?;
-    writeln!(buffer, "#include <stdlib.h>\n")?;
-    codegen.emit_header(buffer, scope)?;
-
-    for fnir in ir.fns() {
-        codegen.emit_fn_def(buffer, scope, fnir)?;
-    }
-
-    Ok(())
-}

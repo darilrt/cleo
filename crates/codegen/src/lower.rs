@@ -4,22 +4,22 @@ use resolver::context;
 use typed_ast::TypedUnit;
 use types::TypeID;
 
-use crate::ir::{BlockIR, ExprIR, FnIR, Intrinsic, StmtIR, UnitIR};
+use crate::ir::{BlockIR, ExprIR, FnIR, Intrinsic, RootIR, StmtIR};
 
 pub struct UnitLowerer<'a> {
-    ir: UnitIR,
+    ir: RootIR,
     ctx: &'a context::Context,
 }
 
 impl<'a> UnitLowerer<'a> {
     pub fn new(ctx: &'a context::Context) -> Self {
         Self {
-            ir: UnitIR::new(),
+            ir: RootIR::new(),
             ctx,
         }
     }
 
-    pub fn lower_unit(mut self, unit: TypedUnit) -> Result<UnitIR, Error> {
+    pub fn lower_unit(mut self, unit: TypedUnit) -> Result<RootIR, Error> {
         for decl in unit.decls {
             if decl.no_emit {
                 continue;
@@ -374,7 +374,7 @@ impl<'a> FrameLowerer<'a> {
     }
 }
 
-pub fn lower(unit: TypedUnit, ctx: &context::Context) -> Result<UnitIR, Error> {
+pub fn lower(unit: TypedUnit, ctx: &context::Context) -> Result<RootIR, Error> {
     let lowerer = UnitLowerer::new(ctx);
 
     lowerer.lower_unit(unit)

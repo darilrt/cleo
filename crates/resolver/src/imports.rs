@@ -12,7 +12,7 @@ pub fn get_imports(ast: &Root) -> Result<Vec<String>, Error> {
                     .iter()
                     .map(|ident| ident.str())
                     .collect::<Vec<_>>()
-                    .join("/");
+                    .join(".");
                 imports.push(import_path);
             }
             _ => {}

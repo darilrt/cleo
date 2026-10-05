@@ -2,11 +2,11 @@ use ast::AssignKind;
 use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug)]
-pub struct UnitIR {
+pub struct RootIR {
     fns: Vec<FnIR>,
 }
 
-impl UnitIR {
+impl RootIR {
     pub fn new() -> Self {
         Self { fns: Vec::new() }
     }

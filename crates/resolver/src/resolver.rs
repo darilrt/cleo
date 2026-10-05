@@ -22,7 +22,13 @@ impl<'a> Resolver<'a> {
     }
 
     pub fn resolve(&mut self, scope: ScopeID, unit: &Root) -> Result<(), Error> {
-        gather(unit, scope, &mut self.ctx.table, &mut self.ctx.interner)?;
+        gather(
+            unit,
+            scope,
+            &mut self.ctx.table,
+            &mut self.ctx.interner,
+            &mut self.ctx.units,
+        )?;
         self.resolve_unit(unit, scope)?;
         Ok(())
     }

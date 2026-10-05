@@ -1,9 +1,11 @@
 use ast::{Decl, Root, TypeBody, TypeDecl};
+use errors::Error;
 use types::{ScopeID, TypeID, TypeInterner, defs::TypeDef};
 
 use crate::{
     defkinds::{EnumDef, FnSig, StructDef, TraitDef, TypeAliasDef},
     symbols::{DefKind, Definition, SymbolTable},
+    unit::UnitRegistry,
 };
 
 pub fn gather_type(ty: &TypeDecl) -> Result<Definition, String> {
@@ -37,28 +39,45 @@ pub fn gather_decl(
     scope: ScopeID,
     table: &mut SymbolTable,
     interner: &mut TypeInterner,
-) -> Result<(), String> {
+    units: &mut UnitRegistry,
+) -> Result<(), Error> {
     for decl in ast {
         match decl {
+            Decl::Import(decl) => {
+                let name = decl.path.last().unwrap().string();
+
+                let import_path = decl
+                    .path
+                    .iter()
+                    .map(|ident| ident.str())
+                    .collect::<Vec<_>>()
+                    .join(".");
+
+                let unit_scope = units
+                    .get(&import_path)
+                    .ok_or_else(|| format!("unit {} not found", import_path))?;
+
+                let def = Definition {
+                    name: name,
+                    kind: DefKind::Unit { scope: unit_scope },
+                };
+
+                table.define(scope, def)?;
+            }
             Decl::Fn(func) => {
                 let def = Definition {
-                    name: func.signature.name.name.clone(),
+                    name: func.signature.name.string(),
                     kind: DefKind::Function(FnSig::unresolved(func.signature.name.str())),
                 };
 
-                let Ok(_) = table.define(scope, def) else {
-                    return Err(format!(
-                        "failed to define function: {}",
-                        func.signature.name.name
-                    ));
-                };
+                table.define(scope, def)?;
             }
 
             Decl::Type(ty) => {
                 let def = gather_type(&ty)?;
 
                 let Ok(def_id) = table.define(scope, def) else {
-                    return Err(format!("failed to define type: {}", ty.name.name));
+                    return Err(format!("failed to define type: {}", ty.name.name).into());
                 };
 
                 let def = table.get_def_mut(def_id).unwrap();
@@ -72,8 +91,6 @@ pub fn gather_decl(
                     _ => {}
                 }
             }
-
-            Decl::Import(_decl) => {}
         }
     }
 
@@ -85,6 +102,7 @@ pub fn gather(
     scope: ScopeID,
     table: &mut SymbolTable,
     interner: &mut TypeInterner,
-) -> Result<(), String> {
-    gather_decl(&ast.decls, scope, table, interner)
+    units: &mut UnitRegistry,
+) -> Result<(), Error> {
+    gather_decl(&ast.decls, scope, table, interner, units)
 }

@@ -1,27 +1,43 @@
-use std::path::Path;
+use std::io::Write;
+use std::{env::current_dir, path::Path};
 
-use ast::Root;
-use errors::Error;
-use parser::unwrap_or_report_file;
-use resolver::{
-    context::{Context, Primitives},
-    defkinds::TypeAliasDef,
-    imports::get_imports,
-    symbols::DefKind,
-};
-use types::ScopeID;
+use project::Project;
 
 pub fn compile(entry: &Path) {
-    let workdir = entry.parent().expect("Failed to get parent directory");
-    let output_dir = create_output_dir(workdir);
+    let workdir = current_dir().expect("Failed to get current working directory");
 
-    let mut ctx = Context::new(Primitives::default());
-    load_primitives(&mut ctx);
+    let project = Project::load_project(entry).expect("Failed to load project");
 
-    let root = ctx.table.root();
+    let result = project.analyze().expect("Failed to load project");
 
-    let units_tree =
-        load_project_units(&mut ctx, entry, root, workdir).expect("Failed to load project");
+    let output_dir = create_output_dir(&workdir);
+    let codegen = codegen::Codegen::new(&result.ctx);
+
+    for unit in result.units {
+        let output_file = output_dir.join(unit.unit_path.replace(".", "/"));
+        let source = output_file.with_extension("c");
+        let header = output_file.with_extension("h");
+
+        std::fs::create_dir_all(output_file.parent().unwrap())
+            .expect("Failed to create output directory");
+
+        {
+            let mut buffer: Vec<u8> = Vec::new();
+            writeln!(buffer, "#include <stdint.h>");
+            writeln!(buffer, "#include <stdio.h>\n");
+            writeln!(buffer, "#include <stdlib.h>\n");
+            codegen.emit_header(&mut buffer, unit.scope);
+            std::fs::write(&header, buffer).expect("Failed to write output file");
+        }
+
+        {
+            let mut buffer: Vec<u8> = Vec::new();
+            for fnir in unit.ir.fns() {
+                codegen.emit_fn_def(&mut buffer, unit.scope, fnir);
+            }
+            std::fs::write(&source, buffer).expect("Failed to write output file");
+        }
+    }
 }
 
 fn create_output_dir(base_path: &Path) -> std::path::PathBuf {
@@ -30,51 +46,4 @@ fn create_output_dir(base_path: &Path) -> std::path::PathBuf {
         std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
     }
     output_dir
-}
-
-#[derive(Debug)]
-pub struct UnitInfo {
-    pub ast: Root,
-    pub scope: ScopeID,
-    pub path: std::path::PathBuf,
-    pub imports: Vec<UnitInfo>,
-}
-
-fn load_project_units(
-    ctx: &mut Context,
-    entry: &Path,
-    scope: ScopeID,
-    workdir: &Path,
-) -> Result<UnitInfo, Error> {
-    let ast = unit_from_file(entry)?;
-    let imports = get_imports(&ast)?;
-
-    let mut units = Vec::new();
-
-    for import in imports {
-        let import_path = workdir.join(import).with_extension("cleo");
-
-        let scope = ctx.table.push(scope)?;
-        let uinfo = load_project_units(ctx, &import_path, scope, workdir)?;
-
-        units.push(uinfo);
-    }
-
-    Ok(UnitInfo {
-        ast,
-        scope,
-        imports: units,
-        path: entry.to_path_buf(),
-    })
-}
-
-fn unit_from_file(path: &Path) -> Result<Root, Error> {
-    let source = std::fs::read_to_string(path)
-        .map_err(|e| format!("Failed to read file {}: {}", path.display(), e))?;
-
-    Ok(unwrap_or_report_file!(
-        parser::parse(&source),
-        path.to_str().unwrap(),
-        &source
-    ))
 }

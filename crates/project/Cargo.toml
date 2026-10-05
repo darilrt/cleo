@@ -10,3 +10,4 @@ parser = { path = "../parser" }
 resolver = { path = "../resolver" }
 types = { path = "../types" }
 codegen = { path = "../codegen" }
+ariadne = "0.6.0"

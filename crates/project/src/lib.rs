@@ -1,25 +1,42 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
+use codegen::{ir::RootIR, lower};
 use errors::Error;
+use parser::unwrap_or_report_file;
 use resolver::{
+    check,
     context::{Context, Primitives},
     defkinds::TypeAliasDef,
+    gather::gather,
+    imports::get_imports,
+    resolve,
     symbols::DefKind,
+    unit,
 };
 use types::ScopeID;
 
 #[derive(Debug, Clone)]
 pub struct UnitInfo {
-    pub path: PathBuf,
+    pub file_path: PathBuf,
+    pub unit_path: String,
     pub scope: ScopeID,
     pub ast: ast::Root,
 }
 
+#[derive(Debug)]
+pub struct AnalyzedUnit {
+    pub unit_path: String,
+    pub ir: RootIR,
+    pub scope: ScopeID,
+}
+
 pub struct Project {
-    entry_file: PathBuf,
     project_dir: PathBuf,
     ctx: Context,
-    units: Vec<UnitInfo>,
+    units: HashMap<String, UnitInfo>,
 }
 
 impl Project {
@@ -33,34 +50,107 @@ impl Project {
             .ok_or_else(|| format!("Failed to get parent directory of {}", abs_path.display()))?
             .to_path_buf();
 
-        let entry_file = abs_path;
-
         let mut ctx = Context::new(Primitives::default());
         load_primitives(&mut ctx);
 
         Ok(Self {
-            entry_file,
             project_dir,
             ctx,
-            units: Vec::new(),
+            units: HashMap::new(),
         })
     }
 
-    pub fn load_project(entry: &Path) -> Result<(), Error> {
+    pub fn load_project(entry: &Path) -> Result<Self, Error> {
         let mut project = Project::new(entry)?;
 
-        let root = project.ctx.table.root();
+        let root_scope = project.ctx.table.root();
+        let scope = project.ctx.table.push(root_scope)?;
 
-        project.load_unit(&project.entry_file, root, &project.project_dir)?;
+        project.load_unit(
+            &project.project_dir.join(entry.file_name().unwrap()),
+            entry.file_stem().unwrap().to_string_lossy().to_string(),
+            root_scope,
+            scope,
+        )?;
 
-        println!("Loaded project units: {:?}", project.units);
+        Ok(project)
+    }
+
+    pub fn analyze(mut self) -> Result<AnalizedProject, Error> {
+        let units: Vec<UnitInfo> = self.units.into_values().collect();
+
+        for unit in units.iter() {
+            self.ctx.units.register(unit.unit_path.clone(), unit.scope);
+        }
+
+        for unit in units.iter() {
+            resolve(&mut self.ctx, unit.scope, &unit.ast)?;
+        }
+
+        let mut result = Vec::new();
+
+        for unit in units.into_iter() {
+            let typed = check(&mut self.ctx, unit.scope, unit.ast)?;
+            let ir = lower(typed, &mut self.ctx)?;
+
+            result.push(AnalyzedUnit {
+                unit_path: unit.unit_path.clone(),
+                ir,
+                scope: unit.scope,
+            });
+        }
+
+        Ok(AnalizedProject {
+            ctx: self.ctx,
+            units: result,
+        })
+    }
+
+    fn load_unit(
+        &mut self,
+        path: &Path,
+        unit_path: String,
+        root_scope: ScopeID,
+        scope: ScopeID,
+    ) -> Result<(), Error> {
+        let source = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read file {}: {}", path.display(), e))?;
+
+        let root = unwrap_or_report_file!(parser::parse(&source), path.to_str().unwrap(), &source);
+        let imports = get_imports(&root)?;
+
+        self.units.insert(
+            unit_path.clone(),
+            UnitInfo {
+                file_path: path.to_path_buf(),
+                unit_path: unit_path,
+                scope,
+                ast: root,
+            },
+        );
+
+        for import in imports {
+            let import_path = self.resolve_import_path(&import);
+            let new_scope = self.ctx.table.push(root_scope)?;
+
+            if !self.units.contains_key(&import) {
+                self.load_unit(&import_path, import, root_scope, new_scope)?;
+            }
+        }
 
         Ok(())
     }
 
-    fn load_unit(&mut self, path: &Path, scope: ScopeID, project_dir: &Path) -> Result<(), Error> {
-        Ok(())
+    fn resolve_import_path(&self, import: &str) -> PathBuf {
+        self.project_dir
+            .join(import.replace(".", "/"))
+            .with_extension("cleo")
     }
+}
+
+pub struct AnalizedProject {
+    pub ctx: Context,
+    pub units: Vec<AnalyzedUnit>,
 }
 
 fn load_primitives(ctx: &mut Context) {

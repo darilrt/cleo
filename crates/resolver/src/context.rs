@@ -108,7 +108,7 @@ impl Context {
 
                         let scope = match last_def {
                             Some(def) => match &def.kind {
-                                DefKind::Module { scope } => scope.clone(),
+                                DefKind::Unit { scope } => scope.clone(),
                                 _ => {
                                     return Err(format!(
                                         "Expected module in path, found {:?}",
