@@ -20,6 +20,7 @@ pub struct SymbolTable {
 #[derive(Debug)]
 pub struct Definition {
     pub name: String,
+    pub mangled_name: Option<String>,
     pub kind: DefKind,
 }
 
@@ -27,8 +28,13 @@ impl Definition {
     pub fn var(name: &str, ty: TypeID) -> Self {
         Self {
             name: name.to_string(),
+            mangled_name: None,
             kind: DefKind::Variable { typeid: ty },
         }
+    }
+
+    pub fn mangled_name(&self) -> &str {
+        self.mangled_name.as_deref().unwrap_or(&self.name)
     }
 
     pub fn typeid(&self) -> Option<TypeID> {
@@ -172,6 +178,7 @@ mod test {
                 root,
                 super::Definition {
                     name: "x".to_string(),
+                    mangled_name: None,
                     kind: super::DefKind::Variable {
                         typeid: super::TypeID(0),
                     },
@@ -193,6 +200,7 @@ mod test {
                 root,
                 super::Definition {
                     name: "x".to_string(),
+                    mangled_name: None,
                     kind: super::DefKind::Variable {
                         typeid: super::TypeID(0),
                     },
@@ -215,6 +223,7 @@ mod test {
                 root,
                 super::Definition {
                     name: "x".to_string(),
+                    mangled_name: None,
                     kind: super::DefKind::Variable {
                         typeid: super::TypeID(0),
                     },
@@ -228,6 +237,7 @@ mod test {
                 child_scope,
                 super::Definition {
                     name: "x".to_string(),
+                    mangled_name: None,
                     kind: super::DefKind::Variable {
                         typeid: super::TypeID(1),
                     },

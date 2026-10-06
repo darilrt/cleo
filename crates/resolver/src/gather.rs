@@ -10,6 +10,7 @@ use crate::{
 
 pub fn gather_type(ty: &TypeDecl) -> Result<Definition, String> {
     Ok(Definition {
+        mangled_name: None,
         name: ty.name.name.clone(),
         kind: match &ty.body {
             TypeBody::Struct(_) => DefKind::Struct(StructDef {
@@ -59,6 +60,7 @@ pub fn gather_decl(
 
                 let def = Definition {
                     name: name,
+                    mangled_name: None,
                     kind: DefKind::Unit { scope: unit_scope },
                 };
 
@@ -67,6 +69,7 @@ pub fn gather_decl(
             Decl::Fn(func) => {
                 let def = Definition {
                     name: func.signature.name.string(),
+                    mangled_name: None,
                     kind: DefKind::Function(FnSig::unresolved(func.signature.name.str())),
                 };
 

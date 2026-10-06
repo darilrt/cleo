@@ -10,11 +10,9 @@ use resolver::{
     check,
     context::{Context, Primitives},
     defkinds::TypeAliasDef,
-    gather::gather,
     imports::get_imports,
     resolve,
     symbols::DefKind,
-    unit,
 };
 use types::ScopeID;
 
@@ -180,6 +178,7 @@ fn load_primitives(ctx: &mut Context) {
 
         let def = resolver::symbols::Definition {
             name: name.to_string(),
+            mangled_name: None,
             kind: DefKind::TypeAlias(TypeAliasDef {
                 resolved: true,
                 typeid,

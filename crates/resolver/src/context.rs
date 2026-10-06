@@ -333,6 +333,7 @@ mod test {
             .define(
                 ctx.table.root(),
                 Definition {
+                    mangled_name: None,
                     name: "Foo".to_string(),
                     kind: DefKind::Struct(StructDef {
                         fields: Vec::new(),

@@ -97,6 +97,12 @@ impl<'a> Resolver<'a> {
             def.resolved = true;
             def.typeid = typeid;
 
+            func_def.mangled_name = if decl.has_attr("extern") {
+                Some(fn_name.to_string())
+            } else {
+                None
+            };
+
             def.no_emit = decl.has_attr("no_emit");
         }
 

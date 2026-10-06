@@ -9,5 +9,12 @@ fn main() {
     }
 
     let path = std::path::Path::new(&args[1]);
-    compile::compile(path);
+
+    match compile::compile(path) {
+        Ok(_) => println!("Compilation successful!"),
+        Err(e) => {
+            eprintln!("Compilation failed: {}", e);
+            std::process::exit(1);
+        }
+    }
 }
