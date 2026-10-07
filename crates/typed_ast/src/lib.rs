@@ -3,6 +3,7 @@ use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedUnit {
+    pub scope: ScopeID,
     pub decls: Vec<FnDecl>,
 }
 
@@ -34,6 +35,13 @@ pub struct TraitMethod {
 pub struct PathExpr {
     pub segments: Vec<Segment>,
     pub typeid: TypeID,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PorcPath {
+    pub segments: Vec<Segment>,
+    pub typeid: TypeID,
+    pub defid: DefID,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,6 +96,7 @@ pub enum Expr {
     Call(ExprCall),
     Access(ExprAccess),
     Path(PathExpr),
+    ProcPath(PorcPath),
     Init(ExprInit),
     Assign(ExprAssign),
     If(ExprIf),
@@ -115,6 +124,7 @@ impl Expr {
             } => *to,
             Expr::Assign(assign) => assign.right.type_id(),
             Expr::Loop(block) => block.typeid,
+            Expr::ProcPath(proc) => proc.typeid,
             _ => unimplemented!("{:?}", self),
             // Expr::Init(init) => init.path.segments.last().unwrap().name.type_id,
         }

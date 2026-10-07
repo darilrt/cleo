@@ -1,6 +1,6 @@
 use ast::{Literal, Operator};
 use errors::Error;
-use resolver::context;
+use resolver::{context, symbols::DefKind};
 use typed_ast::TypedUnit;
 use types::TypeID;
 
@@ -25,7 +25,11 @@ impl<'a> UnitLowerer<'a> {
                 continue;
             }
 
-            let fnir = FrameLowerer::lower_fn(decl, 0, self.ctx)?;
+            let unit_path =
+                self.ctx.units.get_path(unit.scope).ok_or_else(|| {
+                    format!("Could not find unit path for scope {}", unit.scope.0)
+                })?;
+            let fnir = FrameLowerer::lower_fn(decl, 0, unit_path.clone(), self.ctx)?;
             self.ir.add_fn(fnir);
         }
 
@@ -34,15 +38,17 @@ impl<'a> UnitLowerer<'a> {
 }
 
 pub struct FrameLowerer<'a> {
+    unit_path: String,
     stmts: Vec<StmtIR>,
     temps: u32,
     ctx: &'a context::Context,
 }
 
 impl<'a> FrameLowerer<'a> {
-    fn new(temps: u32, ctx: &'a context::Context) -> Self {
+    fn new(ctx: &'a context::Context, unit_path: String, temps: u32) -> Self {
         Self {
             stmts: Vec::new(),
+            unit_path,
             temps,
             ctx,
         }
@@ -69,6 +75,7 @@ impl<'a> FrameLowerer<'a> {
     pub fn lower_fn(
         fndecl: typed_ast::FnDecl,
         temps: u32,
+        unit_path: String,
         ctx: &context::Context,
     ) -> Result<FnIR, Error> {
         if fndecl.body.is_none() {
@@ -86,6 +93,7 @@ impl<'a> FrameLowerer<'a> {
                 ReturnMethod::Return
             },
             temps,
+            unit_path,
             ctx,
         )?;
 
@@ -102,9 +110,10 @@ impl<'a> FrameLowerer<'a> {
         block: typed_ast::Block,
         return_method: ReturnMethod,
         temps: u32,
+        unit_path: String,
         ctx: &context::Context,
     ) -> Result<(u32, BlockIR), Error> {
-        let mut lowerer = FrameLowerer::new(temps, ctx);
+        let mut lowerer = FrameLowerer::new(ctx, unit_path, temps);
         let mut stmts = block.statements;
 
         let Some(last) = stmts.pop() else {
@@ -208,13 +217,7 @@ impl<'a> FrameLowerer<'a> {
             } => self.lower_binary_op(*left, op, *right, typeid),
             typed_ast::Expr::If(expr) => self.lower_if(expr),
             typed_ast::Expr::Assign(expr) => self.lower_assign(expr),
-            typed_ast::Expr::Path(expr) => Ok(ExprIR::Atom(
-                expr.segments
-                    .iter()
-                    .map(|s| s.name.str())
-                    .collect::<Vec<_>>()
-                    .join("."),
-            )),
+            typed_ast::Expr::Path(expr) => self.lower_path(expr),
             typed_ast::Expr::Call(expr) => self.lower_callexpr(expr),
             typed_ast::Expr::UnaryOp {
                 op,
@@ -224,8 +227,41 @@ impl<'a> FrameLowerer<'a> {
             typed_ast::Expr::Access(expr) => self.lower_access(expr),
             typed_ast::Expr::Reinterpret { inner, from, to } => self.lower_cast(*inner, from, to),
             typed_ast::Expr::Loop(block) => self.lower_loop(block),
+            typed_ast::Expr::ProcPath(proc) => self.lower_procpath(proc),
             _ => unimplemented!("expr {:?}", expr),
         }
+    }
+
+    fn lower_procpath(&mut self, proc: typed_ast::PorcPath) -> Result<ExprIR, Error> {
+        let def = self.ctx.table.get_def(proc.defid).ok_or_else(|| {
+            format!(
+                "Could not find definition for proc path with defid {:?}",
+                proc.defid
+            )
+        })?;
+
+        let proc = match &def.kind {
+            DefKind::Proc(proc) => proc,
+            _ => {
+                return Err(format!(
+                    "Expected proc definition for proc path with defid {:?}, found {:?}",
+                    proc.defid, def.kind
+                )
+                .into());
+            }
+        };
+
+        Ok(ExprIR::Atom(def.get_mangled_name(&self.ctx)))
+    }
+
+    fn lower_path(&mut self, expr: typed_ast::PathExpr) -> Result<ExprIR, Error> {
+        Ok(ExprIR::Atom(
+            expr.segments
+                .iter()
+                .map(|s| s.name.str())
+                .collect::<Vec<_>>()
+                .join("."),
+        ))
     }
 
     fn lower_loop(&mut self, block: typed_ast::Block) -> Result<ExprIR, Error> {
@@ -235,7 +271,13 @@ impl<'a> FrameLowerer<'a> {
             .clone()
             .map_or(ReturnMethod::None, |var| ReturnMethod::Var(var));
 
-        let (temps, block) = FrameLowerer::lower_block(block, return_method, self.temps, self.ctx)?;
+        let (temps, block) = FrameLowerer::lower_block(
+            block,
+            return_method,
+            self.temps,
+            self.unit_path.clone(),
+            self.ctx,
+        )?;
 
         self.temps = temps;
         self.stmts.push(StmtIR::For(block));
@@ -348,13 +390,21 @@ impl<'a> FrameLowerer<'a> {
             expr.then_branch,
             return_method.clone(),
             self.temps,
+            self.unit_path.clone(),
             self.ctx,
         )?;
 
         let else_block = expr
             .else_branch
             .and_then(|branch| {
-                FrameLowerer::lower_block(branch, return_method, temps, self.ctx).ok()
+                FrameLowerer::lower_block(
+                    branch,
+                    return_method,
+                    temps,
+                    self.unit_path.clone(),
+                    self.ctx,
+                )
+                .ok()
             })
             .map(|(temps, block)| {
                 self.temps = temps;

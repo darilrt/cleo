@@ -22,6 +22,7 @@ pub struct UnitInfo {
     pub unit_path: String,
     pub scope: ScopeID,
     pub ast: ast::Root,
+    pub imports: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -29,6 +30,7 @@ pub struct AnalyzedUnit {
     pub unit_path: String,
     pub ir: RootIR,
     pub scope: ScopeID,
+    pub imports: Vec<String>,
 }
 
 pub struct Project {
@@ -95,6 +97,7 @@ impl Project {
                 unit_path: unit.unit_path.clone(),
                 ir,
                 scope: unit.scope,
+                imports: unit.imports,
             });
         }
 
@@ -124,6 +127,7 @@ impl Project {
                 unit_path: unit_path,
                 scope,
                 ast: root,
+                imports: imports.clone(),
             },
         );
 
@@ -178,7 +182,7 @@ fn load_primitives(ctx: &mut Context) {
 
         let def = resolver::symbols::Definition {
             name: name.to_string(),
-            mangled_name: None,
+            scope: root,
             kind: DefKind::TypeAlias(TypeAliasDef {
                 resolved: true,
                 typeid,

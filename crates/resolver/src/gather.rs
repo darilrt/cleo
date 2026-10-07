@@ -3,14 +3,14 @@ use errors::Error;
 use types::{ScopeID, TypeID, TypeInterner, defs::TypeDef};
 
 use crate::{
-    defkinds::{EnumDef, FnSig, StructDef, TraitDef, TypeAliasDef},
+    defkinds::{EnumDef, ProcSig, StructDef, TraitDef, TypeAliasDef},
     symbols::{DefKind, Definition, SymbolTable},
     unit::UnitRegistry,
 };
 
-pub fn gather_type(ty: &TypeDecl) -> Result<Definition, String> {
+pub fn gather_type(scope: ScopeID, ty: &TypeDecl) -> Result<Definition, String> {
     Ok(Definition {
-        mangled_name: None,
+        scope,
         name: ty.name.name.clone(),
         kind: match &ty.body {
             TypeBody::Struct(_) => DefKind::Struct(StructDef {
@@ -59,25 +59,25 @@ pub fn gather_decl(
                     .ok_or_else(|| format!("unit {} not found", import_path))?;
 
                 let def = Definition {
+                    scope,
                     name: name,
-                    mangled_name: None,
                     kind: DefKind::Unit { scope: unit_scope },
                 };
 
                 table.define(scope, def)?;
             }
-            Decl::Fn(func) => {
+            Decl::Proc(func) => {
                 let def = Definition {
+                    scope,
                     name: func.signature.name.string(),
-                    mangled_name: None,
-                    kind: DefKind::Function(FnSig::unresolved(func.signature.name.str())),
+                    kind: DefKind::Proc(ProcSig::unresolved(func.signature.name.str())),
                 };
 
                 table.define(scope, def)?;
             }
 
             Decl::Type(ty) => {
-                let def = gather_type(&ty)?;
+                let def = gather_type(scope, &ty)?;
 
                 let Ok(def_id) = table.define(scope, def) else {
                     return Err(format!("failed to define type: {}", ty.name.name).into());

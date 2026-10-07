@@ -1,2 +1,12 @@
-import std.io
-import std.math
+import examples.lib
+
+type Foo = struct {
+    a: i32
+}
+
+proc main() i32 {
+    a: i32 = lib.add(1, 2)
+
+    lib.printf(cast[*u8](&"Hello, World!\n"))
+    0
+}

@@ -22,17 +22,39 @@ pub fn compile(entry: &Path) -> Result<(), Error> {
 
         {
             let header = output_file.with_extension("h");
+            let header_guard = format!("CLEO_{}", unit.unit_path.replace(".", "_").to_uppercase());
+
             let mut buffer: Vec<u8> = Vec::new();
+
+            writeln!(buffer, "#ifndef CLEO_{}", header_guard)?;
+            writeln!(buffer, "#define CLEO_{}", header_guard)?;
+            writeln!(buffer, "")?;
+
             writeln!(buffer, "#include <stdint.h>")?;
-            writeln!(buffer, "#include <stdio.h>\n")?;
-            writeln!(buffer, "#include <stdlib.h>\n")?;
+            unit.imports.iter().for_each(|import| {
+                let import_path = import.replace(".", "/");
+                writeln!(buffer, "#include \"{}.h\"", import_path).unwrap();
+            });
+
+            writeln!(buffer, "")?;
+
             codegen.emit_header(&mut buffer, unit.scope)?;
+            writeln!(buffer, "#endif // CLEO_{}", header_guard)?;
+
             std::fs::write(&header, buffer).expect("Failed to write output file");
         }
 
         {
             let source = output_file.with_extension("c");
             let mut buffer: Vec<u8> = Vec::new();
+
+            writeln!(
+                buffer,
+                "#include \"{}.h\"",
+                unit.unit_path.replace(".", "/")
+            )?;
+            writeln!(buffer, "")?;
+
             for fnir in unit.ir.fns() {
                 codegen.emit_fn_def(&mut buffer, unit.scope, fnir)?;
             }

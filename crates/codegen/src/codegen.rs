@@ -3,7 +3,7 @@ use std::io;
 use errors::Error;
 use resolver::{
     context::{self, Context},
-    defkinds::FnSig,
+    defkinds::ProcSig,
     symbols::DefKind,
 };
 use types::{ScopeID, TypeID, defs::TypeDef};
@@ -81,7 +81,7 @@ impl<'a> Codegen<'a> {
                 .ok_or_else(|| format!("Def {} does not exists", defid.0))?;
 
             match &def.kind {
-                DefKind::Function(fnsig) => {
+                DefKind::Proc(fnsig) => {
                     if fnsig.no_emit {
                         continue;
                     }
@@ -95,7 +95,7 @@ impl<'a> Codegen<'a> {
         Ok(())
     }
 
-    pub fn emit_fn_sig(&self, buffer: &mut impl io::Write, fnsig: &FnSig) -> Result<(), Error> {
+    pub fn emit_fn_sig(&self, buffer: &mut impl io::Write, fnsig: &ProcSig) -> Result<(), Error> {
         emit_type(self.ctx, buffer, fnsig.return_type, &fnsig.name)?;
         write!(buffer, "(")?;
 

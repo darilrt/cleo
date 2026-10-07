@@ -5,7 +5,7 @@ pub struct Root {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Decl {
-    Fn(FnDecl),
+    Proc(ProcDecl),
     Type(TypeDecl),
     Import(ImportDecl),
 }
@@ -259,13 +259,13 @@ impl Operator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FnDecl {
+pub struct ProcDecl {
     pub attrs: Vec<Attribute>,
     pub signature: FnSignature,
     pub block: Option<Block>,
 }
 
-impl FnDecl {
+impl ProcDecl {
     pub fn has_attr(&self, name: &str) -> bool {
         self.attrs
             .iter()

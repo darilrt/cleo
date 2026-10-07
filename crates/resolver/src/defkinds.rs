@@ -36,7 +36,7 @@ pub struct TypeAliasDef {
 }
 
 #[derive(Debug)]
-pub struct FnSig {
+pub struct ProcSig {
     pub name: String,
     pub params: Vec<String>,
     pub typeid: TypeID,
@@ -46,7 +46,7 @@ pub struct FnSig {
     pub no_emit: bool,
 }
 
-impl FnSig {
+impl ProcSig {
     pub fn unresolved(name: &str) -> Self {
         Self {
             name: name.to_string(),

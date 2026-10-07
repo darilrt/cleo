@@ -1,4 +1,4 @@
-use ast::{Attribute, FnDecl, FnParam, FnSignature, Ident};
+use ast::{Attribute, FnParam, FnSignature, Ident, ProcDecl};
 use chumsky::{IterParser, Parser, input::ValueInput, prelude::just, span::SimpleSpan};
 use lexer::TokenKind;
 
@@ -88,7 +88,7 @@ where
 }
 
 // fn_decl = "fn", fn_signature, block;
-pub fn fn_decl<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, FnDecl>
+pub fn fn_decl<'tokens, 'src: 'tokens, I>() -> BoxedParser<'tokens, 'src, I, ProcDecl>
 where
     I: ValueInput<'tokens, Token = TokenKind<'src>, Span = SimpleSpan>,
 {
@@ -98,7 +98,7 @@ where
                 .ignore_then(fn_signature())
                 .then(block().or_not()),
         )
-        .map(|(attrs, (signature, block))| FnDecl {
+        .map(|(attrs, (signature, block))| ProcDecl {
             signature,
             block,
             attrs,
@@ -106,7 +106,7 @@ where
         .boxed()
 }
 
-test_parser!(fn_decl() => FnDecl);
+test_parser!(fn_decl() => ProcDecl);
 
 mod test {
     #[allow(unused_imports)]
@@ -124,7 +124,7 @@ mod test {
 
         assert_eq!(
             fn_decl,
-            FnDecl {
+            ProcDecl {
                 signature: FnSignature {
                     name: Ident {
                         name: "foo".to_string()

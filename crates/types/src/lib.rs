@@ -7,7 +7,7 @@ use crate::defs::TypeDef;
 #[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
 pub struct DefID(pub usize);
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct ScopeID(pub usize);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]

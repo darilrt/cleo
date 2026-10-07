@@ -1,4 +1,4 @@
-use ast::{Decl, FnDecl, Root, TypeBody, TypeDecl};
+use ast::{Decl, ProcDecl, Root, TypeBody, TypeDecl};
 use errors::Error;
 use types::{
     ScopeID,
@@ -42,13 +42,13 @@ impl<'a> Resolver<'a> {
 
     pub fn resolve_decl(&mut self, scope: ScopeID, decl: &Decl) -> Result<(), Error> {
         match decl {
-            Decl::Fn(decl) => self.resolve_fn(scope, decl),
+            Decl::Proc(decl) => self.resolve_proc(scope, decl),
             Decl::Type(decl) => self.resolve_type(scope, decl),
             Decl::Import(_) => Ok(()),
         }
     }
 
-    pub fn resolve_fn(&mut self, scope: ScopeID, decl: &FnDecl) -> Result<(), Error> {
+    pub fn resolve_proc(&mut self, scope: ScopeID, decl: &ProcDecl) -> Result<(), Error> {
         let params = decl
             .signature
             .params
@@ -60,7 +60,7 @@ impl<'a> Resolver<'a> {
             .collect::<Result<Vec<_>, String>>()?;
 
         {
-            let fn_name = decl.signature.name.str();
+            let proc_name = decl.signature.name.str();
             let ret_typeid = match &decl.signature.return_type {
                 Some(ty) => self.ctx.resolve_id(scope, ty)?,
                 None => self.ctx.primitives.nothing,
@@ -69,20 +69,20 @@ impl<'a> Resolver<'a> {
             let defid = self
                 .ctx
                 .table
-                .lookup_local(scope, &fn_name)
-                .ok_or_else(|| format!("Function '{}' not found in symbol table", fn_name))?;
+                .lookup_local(scope, &proc_name)
+                .ok_or_else(|| format!("Function '{}' not found in symbol table", proc_name))?;
 
             let func_def = self.ctx.table.get_def_mut(defid).ok_or_else(|| {
                 format!(
                     "Function definition for '{}' not found in symbol table",
-                    fn_name
+                    proc_name
                 )
             })?;
 
-            let DefKind::Function(def) = &mut func_def.kind else {
+            let DefKind::Proc(def) = &mut func_def.kind else {
                 return Err(format!(
                     "Expected function definition for '{}', found {:?}",
-                    fn_name, func_def.kind
+                    proc_name, func_def.kind
                 )
                 .into());
             };
@@ -97,12 +97,7 @@ impl<'a> Resolver<'a> {
             def.resolved = true;
             def.typeid = typeid;
 
-            func_def.mangled_name = if decl.has_attr("extern") {
-                Some(fn_name.to_string())
-            } else {
-                None
-            };
-
+            def.is_extern = decl.has_attr("extern");
             def.no_emit = decl.has_attr("no_emit");
         }
 

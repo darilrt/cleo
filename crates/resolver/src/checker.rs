@@ -1,6 +1,6 @@
 use ast::{
-    Block, Decl, Expr, ExprAccess, ExprAssign, ExprCall, ExprIf, FnDecl, IntegerSuffix, Literal,
-    Local, Operator, PathExpr, Root, Segment, Stmt,
+    Block, Decl, Expr, ExprAccess, ExprAssign, ExprCall, ExprIf, IntegerSuffix, Literal, Local,
+    Operator, PathExpr, ProcDecl, Root, Stmt,
 };
 use errors::Error;
 use typed_ast::TypedUnit;
@@ -29,7 +29,8 @@ pub struct Checker<'a> {
 pub enum Resolved {
     Value(TypeID),
     Type(TypeID, DefID),
-    EnumValue(TypeID),
+    Function(TypeID, DefID),
+    EnumValue(TypeID, DefID),
     Module(ScopeID),
 }
 
@@ -39,11 +40,14 @@ impl<'a> Checker<'a> {
     }
 
     pub fn check(&mut self, scope: ScopeID, unit: Root) -> Result<TypedUnit, Error> {
-        let mut out = TypedUnit { decls: Vec::new() };
+        let mut out = TypedUnit {
+            decls: Vec::new(),
+            scope,
+        };
 
         for decl in unit.decls {
             match decl {
-                Decl::Fn(decl) => {
+                Decl::Proc(decl) => {
                     if let Some(f) = self.resolve_fn(scope, decl)? {
                         out.decls.push(f);
                     }
@@ -58,7 +62,7 @@ impl<'a> Checker<'a> {
     pub fn resolve_fn(
         &mut self,
         scope: ScopeID,
-        decl: FnDecl,
+        decl: ProcDecl,
     ) -> Result<Option<typed_ast::FnDecl>, Error> {
         let fn_name = decl.signature.name.str();
 
@@ -68,7 +72,7 @@ impl<'a> Checker<'a> {
             .lookup_local(scope, &fn_name)
             .ok_or_else(|| format!("Function '{}' not found in symbol table", fn_name))?;
 
-        let DefKind::Function(sig) = &self
+        let DefKind::Proc(sig) = &self
             .ctx
             .table
             .get_def(defid)
@@ -115,7 +119,7 @@ impl<'a> Checker<'a> {
 
                 self.ctx
                     .table
-                    .define(scopeid, Definition::var(param_name, typeid.clone()))
+                    .define(scopeid, Definition::var(scope, param_name, typeid.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -299,17 +303,7 @@ impl<'a> Checker<'a> {
             }
             Expr::If(expr) => self.resolve_if(scope, expr, block_ctx),
             Expr::Assign(expr) => self.resolve_assign(scope, expr, block_ctx),
-            Expr::Path(path) => {
-                let (segments, resolved) = self.resolve_pathexpr(scope, path)?;
-                Ok(typed_ast::Expr::Path(typed_ast::PathExpr {
-                    segments,
-                    typeid: match resolved {
-                        Resolved::Value(typeid) => typeid,
-                        Resolved::EnumValue(typeid) => typeid,
-                        _ => return Err(format!("Expected value expression").into()),
-                    },
-                }))
-            }
+            Expr::Path(path) => self.resolve_pathexpr(scope, path),
             Expr::UnaryOp { op, expr } => self.resolve_unaryop(scope, op, *expr, block_ctx),
             Expr::Call(expr) => self.resolve_callexpr_or_intrinsic(scope, expr, block_ctx),
             Expr::Access(expr) => self.resolve_access(scope, expr, block_ctx),
@@ -616,7 +610,7 @@ impl<'a> Checker<'a> {
         let _ = self
             .ctx
             .table
-            .define(scope, Definition::var(local.name.str(), typeid))?;
+            .define(scope, Definition::var(scope, local.name.str(), typeid))?;
 
         Ok(typed_ast::Local {
             name: local.name.string(),
@@ -670,7 +664,7 @@ impl<'a> Checker<'a> {
         &mut self,
         scope: ScopeID,
         path: PathExpr,
-    ) -> Result<(Vec<Segment>, Resolved), Error> {
+    ) -> Result<typed_ast::Expr, Error> {
         // TODO: Revisar esta implementacion para resolver PathExpressions y devovler un TypedUnit
         let mut it = path.segments.iter();
         let first = it
@@ -694,7 +688,21 @@ impl<'a> Checker<'a> {
             current = self.resolve_next(current, seg.name.str())?;
         }
 
-        Ok((path.segments, current))
+        if let Resolved::Function(typeid, defid) = current {
+            Ok(typed_ast::Expr::ProcPath(typed_ast::PorcPath {
+                segments: path.segments,
+                typeid,
+                defid,
+            }))
+        } else {
+            Ok(typed_ast::Expr::Path(typed_ast::PathExpr {
+                segments: path.segments,
+                typeid: match current {
+                    Resolved::Value(typeid) => typeid,
+                    _ => return Err(format!("Expected value expression").into()),
+                },
+            }))
+        }
     }
 
     pub fn resolve_next(&mut self, current: Resolved, name: &str) -> Result<Resolved, Error> {
@@ -718,12 +726,12 @@ impl<'a> Checker<'a> {
                 let field_ty = self.resolve_field_or_method(ty, name)?;
                 Ok(Resolved::Value(field_ty))
             }
-            Resolved::Type(typeid, def_id) => {
-                let def = self.ctx.table.get_def(def_id).unwrap();
+            Resolved::Type(typeid, defid) => {
+                let def = self.ctx.table.get_def(defid).unwrap();
                 match &def.kind {
                     DefKind::Enum(enum_def) => {
                         if enum_def.values.contains(&name.to_string()) {
-                            Ok(Resolved::EnumValue(typeid))
+                            Ok(Resolved::EnumValue(typeid, defid))
                         } else {
                             Err(format!("enum '{}' has no value '{}'", def.name, name).into())
                         }
@@ -739,8 +747,12 @@ impl<'a> Checker<'a> {
                     _ => Err(format!("cannot access '{}' on '{}'", name, def.name).into()),
                 }
             }
-            Resolved::EnumValue(_typeid) => {
+            Resolved::EnumValue(_typeid, _defid) => {
                 Err(format!("cannot access '{}' on enum variant, use an instance", name).into())
+            }
+            Resolved::Function(_typeid, defid) => {
+                let def = self.ctx.table.get_def(defid).unwrap();
+                Err(format!("cannot access '{}' on function '{}'", name, def.name).into())
             }
         }
     }
@@ -764,7 +776,7 @@ impl<'a> Checker<'a> {
                 .ok_or_else(|| "internal: method DefID not found".to_string())?;
 
             match &def.kind {
-                DefKind::Function(fnsig) => Ok(fnsig.typeid),
+                DefKind::Proc(fnsig) => Ok(fnsig.typeid),
                 _ => unreachable!("MethodTable contains non-function DefID"),
             }
         } else if let Some(instance) = self.ctx.interner.get(typeid) {
@@ -808,7 +820,7 @@ impl<'a> Checker<'a> {
     fn def_to_resolved(&self, def: &Definition, defid: DefID) -> Resolved {
         match &def.kind {
             DefKind::Variable { typeid } => Resolved::Value(*typeid),
-            DefKind::Function(sig) => Resolved::Value(sig.typeid),
+            DefKind::Proc(sig) => Resolved::Function(sig.typeid, defid),
             DefKind::Struct(s) => Resolved::Type(s.typeid, defid),
             DefKind::Enum(e) => Resolved::Type(e.typeid, defid),
             DefKind::Trait(t) => Resolved::Type(t.typeid, defid),
@@ -896,7 +908,7 @@ impl<'a> Checker<'a> {
             Resolved::Value(typeid) => Ok(typed_ast::Expr::Access(typed_ast::ExprAccess {
                 inner: Box::new(inner),
                 segment: expr.segment,
-                typeid: typeid,
+                typeid,
             })),
             _ => unreachable!("a type could not be reachable from a instance"),
         }

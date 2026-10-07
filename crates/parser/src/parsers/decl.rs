@@ -13,7 +13,7 @@ where
 {
     type_decl()
         .map(Decl::Type)
-        .or(fn_decl().map(Decl::Fn))
+        .or(fn_decl().map(Decl::Proc))
         .or(import_decl().map(Decl::Import))
         .then_ignore(just(TokenKind::Semicolon).or_not())
         .boxed()

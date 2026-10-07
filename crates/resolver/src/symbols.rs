@@ -3,7 +3,10 @@ use std::{collections::HashMap, fmt::Debug};
 use errors::Error;
 use types::{DefID, ScopeID, TypeID};
 
-use crate::defkinds::{EnumDef, FnSig, StructDef, TraitDef, TypeAliasDef};
+use crate::{
+    context::Context,
+    defkinds::{EnumDef, ProcSig, StructDef, TraitDef, TypeAliasDef},
+};
 
 #[derive(Debug)]
 pub struct Scope {
@@ -19,22 +22,30 @@ pub struct SymbolTable {
 
 #[derive(Debug)]
 pub struct Definition {
+    pub scope: ScopeID,
     pub name: String,
-    pub mangled_name: Option<String>,
     pub kind: DefKind,
 }
 
 impl Definition {
-    pub fn var(name: &str, ty: TypeID) -> Self {
-        Self {
-            name: name.to_string(),
-            mangled_name: None,
-            kind: DefKind::Variable { typeid: ty },
+    pub fn get_mangled_name(&self, ctx: &Context) -> Result<String, Error> {
+        let scope_path = ctx
+            .units
+            .get_path(scope)
+            .ok_or_else(|| format!("invalid scope: {:?}", self.scope.0))?;
+
+        match &self.kind {
+            DefKind::Proc(sig) => {}
+            _ => Ok(self.name.clone()),
         }
     }
 
-    pub fn mangled_name(&self) -> &str {
-        self.mangled_name.as_deref().unwrap_or(&self.name)
+    pub fn var(scope: ScopeID, name: &str, ty: TypeID) -> Self {
+        Self {
+            scope,
+            name: name.to_string(),
+            kind: DefKind::Variable { typeid: ty },
+        }
     }
 
     pub fn typeid(&self) -> Option<TypeID> {
@@ -43,13 +54,15 @@ impl Definition {
             DefKind::Struct(def) => Some(def.typeid),
             DefKind::TypeAlias(def) => Some(def.typeid),
             DefKind::Trait(def) => Some(def.typeid),
-            _ => None,
+            DefKind::Proc(ProcSig { typeid, .. }) => Some(*typeid),
+            DefKind::Variable { typeid } => Some(*typeid),
+            DefKind::Unit { .. } => None,
         }
     }
 
-    pub fn fn_sig(&self) -> Option<&FnSig> {
+    pub fn fn_sig(&self) -> Option<&ProcSig> {
         match &self.kind {
-            DefKind::Function(sig) => Some(sig),
+            DefKind::Proc(sig) => Some(sig),
             _ => None,
         }
     }
@@ -62,7 +75,7 @@ pub enum DefKind {
     Struct(StructDef),
     Trait(TraitDef),
     Enum(EnumDef),
-    Function(FnSig),
+    Proc(ProcSig),
     Unit { scope: ScopeID },
 }
 
@@ -177,8 +190,8 @@ mod test {
             .define(
                 root,
                 super::Definition {
+                    scope: root,
                     name: "x".to_string(),
-                    mangled_name: None,
                     kind: super::DefKind::Variable {
                         typeid: super::TypeID(0),
                     },
@@ -199,8 +212,8 @@ mod test {
             .define(
                 root,
                 super::Definition {
+                    scope: root,
                     name: "x".to_string(),
-                    mangled_name: None,
                     kind: super::DefKind::Variable {
                         typeid: super::TypeID(0),
                     },
@@ -223,7 +236,7 @@ mod test {
                 root,
                 super::Definition {
                     name: "x".to_string(),
-                    mangled_name: None,
+                    scope: root,
                     kind: super::DefKind::Variable {
                         typeid: super::TypeID(0),
                     },
@@ -236,8 +249,8 @@ mod test {
             .define(
                 child_scope,
                 super::Definition {
+                    scope: child_scope,
                     name: "x".to_string(),
-                    mangled_name: None,
                     kind: super::DefKind::Variable {
                         typeid: super::TypeID(1),
                     },
