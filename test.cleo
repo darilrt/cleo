@@ -1,12 +1,10 @@
 import examples.lib
 
-type Foo = struct {
-    a: i32
-}
-
+@no_mangle
 proc main() i32 {
     a: i32 = lib.add(1, 2)
 
     lib.printf(cast[*u8](&"Hello, World!\n"))
+
     0
 }

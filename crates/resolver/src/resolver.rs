@@ -97,7 +97,7 @@ impl<'a> Resolver<'a> {
             def.resolved = true;
             def.typeid = typeid;
 
-            def.is_extern = decl.has_attr("extern");
+            def.no_mangle = decl.has_attr("no_mangle");
             def.no_emit = decl.has_attr("no_emit");
         }
 

@@ -42,7 +42,7 @@ pub struct ProcSig {
     pub typeid: TypeID,
     pub return_type: TypeID,
     pub resolved: bool,
-    pub is_extern: bool,
+    pub no_mangle: bool,
     pub no_emit: bool,
 }
 
@@ -54,7 +54,7 @@ impl ProcSig {
             return_type: TypeID(0),
             resolved: false,
             typeid: TypeID(0),
-            is_extern: false,
+            no_mangle: false,
             no_emit: false,
         }
     }

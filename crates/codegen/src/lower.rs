@@ -240,8 +240,8 @@ impl<'a> FrameLowerer<'a> {
             )
         })?;
 
-        let proc = match &def.kind {
-            DefKind::Proc(proc) => proc,
+        match &def.kind {
+            DefKind::Proc(_) => {}
             _ => {
                 return Err(format!(
                     "Expected proc definition for proc path with defid {:?}, found {:?}",
@@ -251,7 +251,7 @@ impl<'a> FrameLowerer<'a> {
             }
         };
 
-        Ok(ExprIR::Atom(def.get_mangled_name(&self.ctx)))
+        Ok(ExprIR::Atom(def.get_mangled_name(&self.ctx)?))
     }
 
     fn lower_path(&mut self, expr: typed_ast::PathExpr) -> Result<ExprIR, Error> {

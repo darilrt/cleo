@@ -31,11 +31,18 @@ impl Definition {
     pub fn get_mangled_name(&self, ctx: &Context) -> Result<String, Error> {
         let scope_path = ctx
             .units
-            .get_path(scope)
-            .ok_or_else(|| format!("invalid scope: {:?}", self.scope.0))?;
+            .get_path(self.scope)
+            .ok_or_else(|| format!("invalid scope: {:?}", self.scope.0))?
+            .replace(".", "_");
 
         match &self.kind {
-            DefKind::Proc(sig) => {}
+            DefKind::Proc(sig) => {
+                if sig.no_mangle {
+                    return Ok(sig.name.clone());
+                }
+
+                Ok(format!("{}_{}", scope_path, sig.name))
+            }
             _ => Ok(self.name.clone()),
         }
     }

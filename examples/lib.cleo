@@ -1,6 +1,6 @@
 
 @extern
-@no_emit
+@no_mangle
 proc printf(s: *const u8)
 
 proc add(a: i32, b: i32) i32 {
