@@ -4,6 +4,8 @@ use std::{env::current_dir, path::Path};
 use errors::Error;
 use project::Project;
 
+const CLEO_HEADER_NAME: &str = "cleotypes.h";
+
 pub fn compile(entry: &Path) -> Result<(), Error> {
     let workdir = current_dir().expect("Failed to get current working directory");
 
@@ -32,7 +34,7 @@ pub fn compile(entry: &Path) -> Result<(), Error> {
             writeln!(buffer, "#define CLEO_{}", header_guard)?;
             writeln!(buffer, "")?;
 
-            // writeln!(buffer, "#include <stdint.h>")?;
+            writeln!(buffer, "#include \"{}\"", CLEO_HEADER_NAME)?;
             unit.imports.iter().for_each(|import| {
                 let import_path = import.replace(".", "/");
                 writeln!(buffer, "#include \"{}.h\"", import_path).unwrap();
@@ -50,8 +52,6 @@ pub fn compile(entry: &Path) -> Result<(), Error> {
             let source = output_file.with_extension("c");
             let mut buffer: Vec<u8> = Vec::new();
 
-            writeln!(buffer, "#include <stdint.h>\n",)?;
-
             writeln!(
                 buffer,
                 "#include \"{}.h\"",
@@ -68,6 +68,7 @@ pub fn compile(entry: &Path) -> Result<(), Error> {
         }
     }
 
+    generate_cleo_types(&output_dir)?;
     generate_build_script(&output_dir, &generated_c_files)?;
 
     Ok(())
@@ -79,6 +80,39 @@ fn create_output_dir(base_path: &Path) -> std::path::PathBuf {
         std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
     }
     output_dir
+}
+
+fn generate_cleo_types(output_dir: &Path) -> Result<(), Error> {
+    let content = "
+#ifndef UINT32_MAX
+typedef __UINT8_TYPE__     uint8_t;
+typedef __INT8_TYPE__      int8_t;
+typedef __UINT16_TYPE__    uint16_t;
+typedef __INT16_TYPE__     int16_t;
+typedef __UINT32_TYPE__    uint32_t;
+typedef __INT32_TYPE__     int32_t;
+typedef __UINT64_TYPE__    uint64_t;
+typedef __INT64_TYPE__     int64_t;
+#endif
+
+#if !defined(__size_t_defined) && !defined(_SIZE_T_DEFINED) && !defined(_SIZE_T)
+typedef __SIZE_TYPE__      size_t;
+#define __size_t_defined
+#define _SIZE_T_DEFINED
+#define _SIZE_T
+#endif
+
+#if !defined(__ptrdiff_t_defined) && !defined(_PTRDIFF_T_DEFINED) && !defined(_PTRDIFF_T)
+typedef __PTRDIFF_TYPE__   ptrdiff_t;
+#define __ptrdiff_t_defined
+#define _PTRDIFF_T_DEFINED
+#define _PTRDIFF_T
+#endif
+";
+
+    std::fs::write(&output_dir.join(CLEO_HEADER_NAME), content)?;
+
+    Ok(())
 }
 
 // Temporal helper to build projects
@@ -106,6 +140,7 @@ fn generate_build_script(output_dir: &Path, c_files: &[String]) -> Result<(), Er
     script_content.push_str("    echo \"Build successful! Run with ./app\"\n");
     script_content.push_str("else\n");
     script_content.push_str("    echo \"Build failed.\"\n");
+    script_content.push_str("    exit 1\n"); // <- ESTA ES LA MAGIA
     script_content.push_str("fi\n");
 
     std::fs::write(&script_path, script_content)

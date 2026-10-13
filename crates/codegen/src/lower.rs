@@ -1,8 +1,11 @@
 use ast::{Literal, Operator};
 use errors::Error;
-use resolver::{context, symbols::DefKind};
+use resolver::{
+    context,
+    symbols::{DefKind, Definition},
+};
 use typed_ast::TypedUnit;
-use types::TypeID;
+use types::{TypeID, defs::TypeDef};
 
 use crate::ir::{BlockIR, ExprIR, FnIR, Intrinsic, RootIR, StmtIR};
 
@@ -65,7 +68,7 @@ impl<'a> FrameLowerer<'a> {
     }
 
     pub fn make_temp_if_not_nothing(&mut self, typeid: TypeID) -> Option<String> {
-        if typeid != self.ctx.primitives.nothing {
+        if typeid != self.ctx.primitives.nothing_t {
             Some(self.make_temp(typeid))
         } else {
             None
@@ -83,7 +86,7 @@ impl<'a> FrameLowerer<'a> {
         }
 
         let body: typed_ast::Block = fndecl.body.unwrap();
-        let is_nothing = body.typeid == ctx.primitives.nothing;
+        let is_nothing = body.typeid == ctx.primitives.nothing_t;
 
         let (_, block) = FrameLowerer::lower_block(
             body,
@@ -225,11 +228,16 @@ impl<'a> FrameLowerer<'a> {
                 typeid: _,
             } => self.lower_unaryop(op, *expr),
             typed_ast::Expr::Access(expr) => self.lower_access(expr),
-            typed_ast::Expr::Reinterpret { inner, from, to } => self.lower_cast(*inner, from, to),
             typed_ast::Expr::Loop(block) => self.lower_loop(block),
             typed_ast::Expr::ProcPath(proc) => self.lower_procpath(proc),
+            typed_ast::Expr::Reinterpret { inner, from, to } => self.lower_cast(*inner, from, to),
+            typed_ast::Expr::SizeOf { typeid } => self.lower_sizeof(typeid),
             _ => unimplemented!("expr {:?}", expr),
         }
+    }
+
+    fn lower_sizeof(&mut self, typeid: TypeID) -> Result<ExprIR, Error> {
+        Ok(ExprIR::Intrinsic(Intrinsic::SizeOf { typeid }))
     }
 
     fn lower_procpath(&mut self, proc: typed_ast::PorcPath) -> Result<ExprIR, Error> {
@@ -255,13 +263,37 @@ impl<'a> FrameLowerer<'a> {
     }
 
     fn lower_path(&mut self, expr: typed_ast::PathExpr) -> Result<ExprIR, Error> {
-        Ok(ExprIR::Atom(
-            expr.segments
-                .iter()
-                .map(|s| s.name.str())
-                .collect::<Vec<_>>()
-                .join("."),
-        ))
+        let mut result = String::with_capacity(expr.segments.len() * 16);
+        let mut is_last_ptr = false;
+
+        for seg in expr.segments {
+            let def = seg.defid.and_then(|defid| self.ctx.table.get_def(defid));
+
+            if matches!(
+                def,
+                Some(Definition {
+                    kind: DefKind::Unit { .. },
+                    ..
+                })
+            ) {
+                continue;
+            }
+
+            if !result.is_empty() {
+                if is_last_ptr {
+                    result.push_str("->");
+                } else {
+                    result.push_str(".");
+                }
+            }
+
+            result.push_str(seg.name.str());
+
+            let typedef = seg.typeid.and_then(|typeid| self.ctx.interner.get(typeid));
+            is_last_ptr = matches!(typedef, Some(TypeDef::Pointer { .. }));
+        }
+
+        Ok(ExprIR::Atom(result))
     }
 
     fn lower_loop(&mut self, block: typed_ast::Block) -> Result<ExprIR, Error> {

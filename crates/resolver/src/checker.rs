@@ -9,6 +9,7 @@ use types::{DefID, ScopeID, TypeID, defs::TypeDef};
 use crate::{
     context::Context,
     symbols::{DefKind, Definition},
+    type_id,
 };
 
 pub struct BlockCtx {
@@ -32,6 +33,18 @@ pub enum Resolved {
     Function(TypeID, DefID),
     EnumValue(TypeID, DefID),
     Module(ScopeID),
+}
+
+impl Resolved {
+    pub fn typeid(&self) -> Option<TypeID> {
+        match self {
+            Resolved::Value(typeid) => Some(*typeid),
+            Resolved::Type(typeid, _) => Some(*typeid),
+            Resolved::EnumValue(typeid, _) => Some(*typeid),
+            Resolved::Function(typeid, _) => Some(*typeid),
+            Resolved::Module(_) => None,
+        }
+    }
 }
 
 impl<'a> Checker<'a> {
@@ -170,16 +183,16 @@ impl<'a> Checker<'a> {
         let Some(last) = statements.last() else {
             return Ok(typed_ast::Block {
                 statements: Vec::new(),
-                typeid: self.ctx.primitives.nothing,
+                typeid: self.ctx.primitives.nothing_t,
             });
         };
 
         let typeid = match last {
-            typed_ast::Stmt::Expr(expr) => expr.type_id(),
-            _ => self.ctx.primitives.nothing,
+            typed_ast::Stmt::Expr(expr) => type_id(expr, &self.ctx.primitives),
+            _ => self.ctx.primitives.nothing_t,
         };
 
-        if block_ctx.expected_return != self.ctx.primitives.nothing
+        if block_ctx.expected_return != self.ctx.primitives.nothing_t
             && !self.ctx.is_coercible(typeid, block_ctx.expected_return)
         {
             Err(format!(
@@ -238,7 +251,7 @@ impl<'a> Checker<'a> {
     ) -> Result<typed_ast::Stmt, Error> {
         match (block_ctx.expected_return, expr) {
             (expected, None) => {
-                if expected == self.ctx.primitives.nothing {
+                if expected == self.ctx.primitives.nothing_t {
                     Ok(typed_ast::Stmt::Return(None))
                 } else {
                     Err(format!(
@@ -251,13 +264,17 @@ impl<'a> Checker<'a> {
             (expected, Some(expr)) => {
                 let return_expr = self.resolve_expr(scope, expr, block_ctx)?;
 
-                if self.ctx.is_coercible(return_expr.type_id(), expected) {
+                if self
+                    .ctx
+                    .is_coercible(type_id(&return_expr, &self.ctx.primitives), expected)
+                {
                     Ok(typed_ast::Stmt::Return(Some(return_expr)))
                 } else {
                     Err(format!(
                         "expected return type {}, found {}",
                         self.ctx.type_name(expected),
-                        self.ctx.type_name(return_expr.type_id())
+                        self.ctx
+                            .type_name(type_id(&return_expr, &self.ctx.primitives))
                     )
                     .into())
                 }
@@ -275,20 +292,22 @@ impl<'a> Checker<'a> {
             Expr::Value(value) => {
                 let typeid = match &value {
                     Literal::Integer { value: _, suffix } => match suffix {
-                        None => self.ctx.primitives.i32_,
-                        Some(IntegerSuffix::U8) => self.ctx.primitives.u8_,
-                        Some(IntegerSuffix::U16) => self.ctx.primitives.u16_,
-                        Some(IntegerSuffix::U32) => self.ctx.primitives.u32_,
-                        Some(IntegerSuffix::U64) => self.ctx.primitives.u64_,
-                        Some(IntegerSuffix::I8) => self.ctx.primitives.i8_,
-                        Some(IntegerSuffix::I16) => self.ctx.primitives.i16_,
-                        Some(IntegerSuffix::I32) => self.ctx.primitives.i32_,
-                        Some(IntegerSuffix::I64) => self.ctx.primitives.i64_,
+                        None => self.ctx.primitives.i32_t,
+                        Some(IntegerSuffix::U8) => self.ctx.primitives.u8_t,
+                        Some(IntegerSuffix::U16) => self.ctx.primitives.u16_t,
+                        Some(IntegerSuffix::U32) => self.ctx.primitives.u32_t,
+                        Some(IntegerSuffix::U64) => self.ctx.primitives.u64_t,
+                        Some(IntegerSuffix::I8) => self.ctx.primitives.i8_t,
+                        Some(IntegerSuffix::I16) => self.ctx.primitives.i16_t,
+                        Some(IntegerSuffix::I32) => self.ctx.primitives.i32_t,
+                        Some(IntegerSuffix::I64) => self.ctx.primitives.i64_t,
+                        Some(IntegerSuffix::USize) => self.ctx.primitives.usize_t,
+                        Some(IntegerSuffix::ISize) => self.ctx.primitives.isize_t,
                     },
-                    Literal::Float(_literal) => self.ctx.primitives.f32_,
-                    Literal::Bool(_value) => self.ctx.primitives.bool_,
+                    Literal::Float(_literal) => self.ctx.primitives.f32_t,
+                    Literal::Bool(_value) => self.ctx.primitives.bool_t,
                     Literal::String(lit) => self.ctx.interner.intern(TypeDef::Array {
-                        element: self.ctx.primitives.u8_,
+                        element: self.ctx.primitives.u8_t,
                         size: lit.len(),
                     }),
                     // ExprValue::String(_lit) => self.ctx.interner.intern(TypeDef::Pointer {
@@ -358,12 +377,17 @@ impl<'a> Checker<'a> {
             let TypeDef::FnPointer(fn_type) = self
                 .ctx
                 .interner
-                .get(fnexpr.type_id())
-                .ok_or_else(|| format!("type {} does not exists", fnexpr.type_id().0))?
+                .get(type_id(&fnexpr, &self.ctx.primitives))
+                .ok_or_else(|| {
+                    format!(
+                        "type {} does not exists",
+                        type_id(&fnexpr, &self.ctx.primitives).0
+                    )
+                })?
             else {
                 return Err(format!(
                     "type {} is not callable",
-                    self.ctx.type_name(fnexpr.type_id())
+                    self.ctx.type_name(type_id(&fnexpr, &self.ctx.primitives))
                 )
                 .into());
             };
@@ -387,11 +411,14 @@ impl<'a> Checker<'a> {
             .collect::<Result<Vec<_>, Error>>()?;
 
         for (param, arg) in params.iter().zip(&args) {
-            if !self.ctx.is_coercible(arg.type_id(), *param) {
+            if !self
+                .ctx
+                .is_coercible(type_id(&arg, &self.ctx.primitives), *param)
+            {
                 return Err(format!(
                     "argument type error: expected {}, found {}",
                     self.ctx.type_name(*param),
-                    self.ctx.type_name(arg.type_id())
+                    self.ctx.type_name(type_id(&arg, &self.ctx.primitives))
                 )
                 .into());
             }
@@ -409,6 +436,7 @@ impl<'a> Checker<'a> {
             Expr::Path(expr) => {
                 if expr.segments.len() == 1 {
                     expr.segments[0].name.str() == "cast"
+                        || expr.segments[0].name.str() == "size_of"
                 } else {
                     false
                 }
@@ -436,31 +464,49 @@ impl<'a> Checker<'a> {
         let segment = segments.remove(0);
         let name = segment.name.str();
 
-        if name != "cast" {
+        if name == "cast" {
+            if args.len() != 1 {
+                return Err("cast expects exactly 1 argument".to_string().into());
+            }
+            let value = self.resolve_expr(scope, args[0].clone(), block_ctx)?;
+
+            let Some(generics) = segment.generics else {
+                return Err("cast expects exactly 1 geneirc argument".to_string().into());
+            };
+
+            if generics.len() != 1 {
+                return Err("cast expects exactly 1 geneirc argument".to_string().into());
+            }
+            let generic = self.ctx.resolve_id(scope, &generics[0])?;
+
+            let from = type_id(&value, &self.ctx.primitives);
+
+            Ok(typed_ast::Expr::Reinterpret {
+                inner: Box::new(value),
+                from,
+                to: generic,
+            })
+        } else if name == "size_of" {
+            if args.len() != 0 {
+                return Err("size_of expects exactly 0 argument".to_string().into());
+            }
+            let Some(generics) = segment.generics else {
+                return Err("size_of expects exactly 1 geneirc argument"
+                    .to_string()
+                    .into());
+            };
+
+            if generics.len() != 1 {
+                return Err("size_of expects exactly 1 geneirc argument"
+                    .to_string()
+                    .into());
+            }
+            let generic = self.ctx.resolve_id(scope, &generics[0])?;
+
+            Ok(typed_ast::Expr::SizeOf { typeid: generic })
+        } else {
             return Err(format!("Unknown intrinsic '{}'", name).into());
         }
-
-        if args.len() != 1 {
-            return Err("cast expects exactly 1 argument".to_string().into());
-        }
-        let value = self.resolve_expr(scope, args[0].clone(), block_ctx)?;
-
-        let Some(generics) = segment.generics else {
-            return Err("cast expects exactly 1 geneirc argument".to_string().into());
-        };
-
-        if generics.len() != 1 {
-            return Err("cast expects exactly 1 geneirc argument".to_string().into());
-        }
-        let generic = self.ctx.resolve_id(scope, &generics[0])?;
-
-        let from = value.type_id();
-
-        Ok(typed_ast::Expr::Reinterpret {
-            inner: Box::new(value),
-            from,
-            to: generic,
-        })
     }
 
     pub fn resolve_binaryop(
@@ -474,8 +520,8 @@ impl<'a> Checker<'a> {
         let l_expr = self.resolve_expr(scope, left, block_ctx)?;
         let r_expr = self.resolve_expr(scope, right, block_ctx)?;
 
-        let l = l_expr.type_id();
-        let r = r_expr.type_id();
+        let l = type_id(&l_expr, &self.ctx.primitives);
+        let r = type_id(&r_expr, &self.ctx.primitives);
 
         let typeid: Result<TypeID, Error> = match op {
             Operator::Add | Operator::Sub | Operator::Mul | Operator::Div | Operator::Mod => {
@@ -493,7 +539,7 @@ impl<'a> Checker<'a> {
             }
             Operator::Equal | Operator::NotEqual => {
                 if l == r && self.ctx.is_comparable(l) {
-                    Ok(self.ctx.primitives.bool_)
+                    Ok(self.ctx.primitives.bool_t)
                 } else {
                     Err(format!(
                         "cannot compare {} and {}",
@@ -505,7 +551,7 @@ impl<'a> Checker<'a> {
             }
             Operator::Less | Operator::Greater | Operator::LessEqual | Operator::GreaterEqual => {
                 if l == r && self.ctx.primitives.is_numeric(l) {
-                    Ok(self.ctx.primitives.bool_)
+                    Ok(self.ctx.primitives.bool_t)
                 } else {
                     Err(format!(
                         "cannot compare {} and {}",
@@ -516,8 +562,8 @@ impl<'a> Checker<'a> {
                 }
             }
             Operator::And | Operator::Or => {
-                if l == self.ctx.primitives.bool_ && r == self.ctx.primitives.bool_ {
-                    Ok(self.ctx.primitives.bool_)
+                if l == self.ctx.primitives.bool_t && r == self.ctx.primitives.bool_t {
+                    Ok(self.ctx.primitives.bool_t)
                 } else {
                     Err(format!(
                         "expected bool, found {} and {}",
@@ -548,10 +594,15 @@ impl<'a> Checker<'a> {
     ) -> Result<typed_ast::Expr, Error> {
         let condition = self.resolve_expr(scope, *expr.condition, block_ctx)?;
 
-        if !self.ctx.primitives.is_bool(condition.type_id()) {
+        if !self
+            .ctx
+            .primitives
+            .is_bool(type_id(&condition, &self.ctx.primitives))
+        {
             return Err(format!(
                 "expected bool in if condition, found {}",
-                self.ctx.type_name(condition.type_id())
+                self.ctx
+                    .type_name(type_id(&condition, &self.ctx.primitives))
             )
             .into());
         }
@@ -593,7 +644,7 @@ impl<'a> Checker<'a> {
             .initializer
             .map(|expr| {
                 let expr = self.resolve_expr(scope, *expr, block_ctx)?;
-                let exprid = expr.type_id();
+                let exprid = type_id(&expr, &self.ctx.primitives);
 
                 if !self.ctx.is_coercible(exprid, typeid) {
                     return Err(Error::from(format!(
@@ -632,11 +683,14 @@ impl<'a> Checker<'a> {
         let left = self.resolve_expr(scope, *expr.left, block_ctx)?;
         let right = self.resolve_expr(scope, *expr.right, block_ctx)?;
 
-        if !self.ctx.is_coercible(right.type_id(), left.type_id()) {
+        if !self.ctx.is_coercible(
+            type_id(&right, &self.ctx.primitives),
+            type_id(&left, &self.ctx.primitives),
+        ) {
             return Err(format!(
                 "expected {}, found {}",
-                self.ctx.type_name(left.type_id()),
-                self.ctx.type_name(right.type_id())
+                self.ctx.type_name(type_id(&right, &self.ctx.primitives)),
+                self.ctx.type_name(type_id(&left, &self.ctx.primitives))
             )
             .into());
         }
@@ -665,8 +719,7 @@ impl<'a> Checker<'a> {
         scope: ScopeID,
         path: PathExpr,
     ) -> Result<typed_ast::Expr, Error> {
-        // TODO: Revisar esta implementacion para resolver PathExpressions y devovler un TypedUnit
-        let mut it = path.segments.iter();
+        let mut it = path.segments.into_iter();
         let first = it
             .next()
             .ok_or_else(|| "expected at least 1 segment in PathExpr".to_string())?;
@@ -674,7 +727,7 @@ impl<'a> Checker<'a> {
         let defid = self
             .ctx
             .table
-            .lookup(scope, first.name.str())
+            .lookup(scope, &first.name.name)
             .ok_or_else(|| format!("'{}' not defined", first.name.str()))?;
         let def = self
             .ctx
@@ -684,19 +737,49 @@ impl<'a> Checker<'a> {
 
         let mut current = self.def_to_resolved(def, defid);
 
+        let segment = typed_ast::Segment {
+            name: first.name,
+            generics: match first.generics {
+                Some(generics) => Some(
+                    generics
+                        .iter()
+                        .map(|g| self.ctx.resolve_id(scope, g))
+                        .collect::<Result<Vec<_>, Error>>()?,
+                ),
+                None => None,
+            },
+            typeid: current.typeid(),
+            defid: Some(defid),
+        };
+        let mut segments = vec![segment];
+
         for seg in it {
             current = self.resolve_next(current, seg.name.str())?;
+            segments.push(typed_ast::Segment {
+                name: seg.name,
+                generics: match seg.generics {
+                    Some(generics) => Some(
+                        generics
+                            .iter()
+                            .map(|g| self.ctx.resolve_id(scope, g))
+                            .collect::<Result<Vec<_>, Error>>()?,
+                    ),
+                    None => None,
+                },
+                typeid: current.typeid(),
+                defid: Some(defid),
+            });
         }
 
         if let Resolved::Function(typeid, defid) = current {
             Ok(typed_ast::Expr::ProcPath(typed_ast::PorcPath {
-                segments: path.segments,
+                segments,
                 typeid,
                 defid,
             }))
         } else {
             Ok(typed_ast::Expr::Path(typed_ast::PathExpr {
-                segments: path.segments,
+                segments,
                 typeid: match current {
                     Resolved::Value(typeid) => typeid,
                     _ => return Err(format!("Expected value expression").into()),
@@ -805,6 +888,7 @@ impl<'a> Checker<'a> {
                         .into()),
                     }
                 }
+                TypeDef::Const(typeid) => self.resolve_field_or_method(*typeid, name),
                 _ => Err(format!(
                     "no field \"{}\" on type {}",
                     name,
@@ -837,7 +921,7 @@ impl<'a> Checker<'a> {
         block_ctx: &BlockCtx,
     ) -> Result<typed_ast::Expr, Error> {
         let expr = self.resolve_expr(scope, expr, block_ctx)?;
-        let typeid = expr.type_id();
+        let typeid = type_id(&expr, &self.ctx.primitives);
 
         match op {
             // Operator::Neg => {
@@ -902,12 +986,27 @@ impl<'a> Checker<'a> {
         block_ctx: &BlockCtx,
     ) -> Result<typed_ast::Expr, Error> {
         let inner = self.resolve_expr(scope, *expr.inner, block_ctx)?;
-        let base = Resolved::Value(inner.type_id());
+        let base = Resolved::Value(type_id(&inner, &self.ctx.primitives));
+
+        let generics = match expr.segment.generics {
+            Some(generics) => Some(
+                generics
+                    .iter()
+                    .map(|generic| self.ctx.resolve_id(scope, generic))
+                    .collect::<Result<Vec<_>, Error>>()?,
+            ),
+            None => None,
+        };
 
         match self.resolve_next(base, expr.segment.name.str())? {
             Resolved::Value(typeid) => Ok(typed_ast::Expr::Access(typed_ast::ExprAccess {
                 inner: Box::new(inner),
-                segment: expr.segment,
+                segment: typed_ast::Segment {
+                    name: expr.segment.name,
+                    generics,
+                    defid: None,
+                    typeid: Some(typeid),
+                },
                 typeid,
             })),
             _ => unreachable!("a type could not be reachable from a instance"),

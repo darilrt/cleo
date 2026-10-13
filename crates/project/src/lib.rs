@@ -14,7 +14,7 @@ use resolver::{
     resolve,
     symbols::DefKind,
 };
-use types::ScopeID;
+use types::{ScopeID, TypeID};
 
 #[derive(Debug, Clone)]
 pub struct UnitInfo {
@@ -158,26 +158,8 @@ pub struct AnalizedProject {
 fn load_primitives(ctx: &mut Context) {
     use types::defs::{Signedness, TypeDef};
 
-    let root = ctx.table.root();
-
-    let entries = [
-        ("bool", TypeDef::Bool),
-        ("u8", TypeDef::Int(8, Signedness::Unsigned)),
-        ("u16", TypeDef::Int(16, Signedness::Unsigned)),
-        ("u32", TypeDef::Int(32, Signedness::Unsigned)),
-        ("u64", TypeDef::Int(64, Signedness::Unsigned)),
-        ("i8", TypeDef::Int(8, Signedness::Signed)),
-        ("i16", TypeDef::Int(16, Signedness::Signed)),
-        ("i32", TypeDef::Int(32, Signedness::Signed)),
-        ("i64", TypeDef::Int(64, Signedness::Signed)),
-        ("f32", TypeDef::Float(32)),
-        ("f64", TypeDef::Float(64)),
-        ("c_void", TypeDef::Empty),
-    ];
-
-    let mut ids = Vec::new();
-
-    for (name, ty) in entries {
+    let add: fn(&mut Context, &str, TypeDef) -> TypeID = |ctx, name, ty| {
+        let root = ctx.table.root();
         let typeid = ctx.interner.intern(ty);
 
         let def = resolver::symbols::Definition {
@@ -190,23 +172,28 @@ fn load_primitives(ctx: &mut Context) {
         };
 
         ctx.table.define(root, def).unwrap();
-        ids.push(typeid);
-    }
 
-    let nothing = ctx.interner.intern(TypeDef::Empty);
+        typeid
+    };
 
-    ctx.set_primitives(Primitives {
-        nothing,
-        bool_: ids[0],
-        u8_: ids[1],
-        u16_: ids[2],
-        u32_: ids[3],
-        u64_: ids[4],
-        i8_: ids[5],
-        i16_: ids[6],
-        i32_: ids[7],
-        i64_: ids[8],
-        f32_: ids[9],
-        f64_: ids[10],
-    });
+    let primitives = Primitives {
+        bool_t: add(ctx, "bool", TypeDef::Bool),
+        u8_t: add(ctx, "u8", TypeDef::Int(8, Signedness::Unsigned)),
+        u16_t: add(ctx, "u16", TypeDef::Int(16, Signedness::Unsigned)),
+        u32_t: add(ctx, "u32", TypeDef::Int(32, Signedness::Unsigned)),
+        u64_t: add(ctx, "u64", TypeDef::Int(64, Signedness::Unsigned)),
+        i8_t: add(ctx, "i8", TypeDef::Int(8, Signedness::Signed)),
+        i16_t: add(ctx, "i16", TypeDef::Int(16, Signedness::Signed)),
+        i32_t: add(ctx, "i32", TypeDef::Int(32, Signedness::Signed)),
+        i64_t: add(ctx, "i64", TypeDef::Int(64, Signedness::Signed)),
+        f32_t: add(ctx, "f32", TypeDef::Float(32)),
+        f64_t: add(ctx, "f64", TypeDef::Float(64)),
+        usize_t: add(ctx, "usize", TypeDef::USize),
+        isize_t: add(ctx, "isize", TypeDef::ISize),
+        nothing_t: ctx.interner.intern(TypeDef::Empty),
+    };
+
+    ctx.set_primitives(primitives);
+
+    let _ = add(ctx, "c_void", TypeDef::Empty);
 }

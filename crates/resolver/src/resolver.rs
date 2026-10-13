@@ -57,13 +57,13 @@ impl<'a> Resolver<'a> {
                 let ty = self.ctx.resolve_id(scope, &param.ty)?;
                 Ok((param.name.str().to_string(), ty))
             })
-            .collect::<Result<Vec<_>, String>>()?;
+            .collect::<Result<Vec<_>, Error>>()?;
 
         {
             let proc_name = decl.signature.name.str();
             let ret_typeid = match &decl.signature.return_type {
                 Some(ty) => self.ctx.resolve_id(scope, ty)?,
-                None => self.ctx.primitives.nothing,
+                None => self.ctx.primitives.nothing_t,
             };
 
             let defid = self
@@ -164,7 +164,7 @@ impl<'a> Resolver<'a> {
                         let field_typeid = self.ctx.resolve_id(scope, &field.field_type)?;
                         Ok((field.name.string(), field_typeid))
                     })
-                    .collect::<Result<Vec<_>, String>>()?;
+                    .collect::<Result<Vec<_>, Error>>()?;
 
                 let def = self
                     .ctx

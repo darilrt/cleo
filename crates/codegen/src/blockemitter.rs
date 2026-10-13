@@ -136,6 +136,11 @@ impl<'a, 's> BlockEmitter<'a, 's> {
         intrinsic: &Intrinsic,
     ) -> Result<(), Error> {
         match intrinsic {
+            Intrinsic::SizeOf { typeid } => {
+                write!(buffer, "sizeof(")?;
+                emit_type(self.ctx, buffer, *typeid, "")?;
+                write!(buffer, ")")?;
+            }
             Intrinsic::Reinterpret {
                 inner: expr,
                 from,

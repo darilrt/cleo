@@ -1,0 +1,8 @@
+
+@extern
+@no_mangle
+proc malloc(size: usize) *c_void
+
+@extern
+@no_mangle
+proc free(ptr: *c_void)

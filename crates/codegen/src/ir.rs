@@ -76,6 +76,9 @@ pub enum Intrinsic {
         from: TypeID,
         to: TypeID,
     },
+    SizeOf {
+        typeid: TypeID,
+    },
 }
 
 #[derive(Debug)]

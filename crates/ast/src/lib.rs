@@ -196,6 +196,8 @@ pub enum IntegerSuffix {
     I16,
     I32,
     I64,
+    USize,
+    ISize,
 }
 
 #[derive(Debug, Clone, PartialEq)]

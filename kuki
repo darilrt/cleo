@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -e
+
+cargo build
+
+cd examples/
+../target/debug/cleoc ppm_image_02.cleo
+
+cd out/
+./build.sh
+
+./app

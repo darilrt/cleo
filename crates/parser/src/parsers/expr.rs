@@ -269,6 +269,10 @@ fn parse_int_literal(raw: &str) -> Result<Literal, String> {
         (s, Some(IntegerSuffix::I32))
     } else if let Some(s) = raw.strip_suffix("i64") {
         (s, Some(IntegerSuffix::I64))
+    } else if let Some(s) = raw.strip_suffix("usize") {
+        (s, Some(IntegerSuffix::USize))
+    } else if let Some(s) = raw.strip_suffix("isize") {
+        (s, Some(IntegerSuffix::ISize))
     } else {
         (raw, None)
     };

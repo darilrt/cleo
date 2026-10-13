@@ -1,4 +1,4 @@
-use ast::{AssignKind, Ident, Operator, Segment};
+use ast::{AssignKind, Ident, Operator};
 use types::{DefID, ScopeID, TypeID};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,6 +35,14 @@ pub struct TraitMethod {
 pub struct PathExpr {
     pub segments: Vec<Segment>,
     pub typeid: TypeID,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Segment {
+    pub name: Ident,
+    pub generics: Option<Vec<TypeID>>,
+    pub typeid: Option<TypeID>,
+    pub defid: Option<DefID>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,6 +101,9 @@ pub enum Expr {
         from: TypeID,
         to: TypeID,
     },
+    SizeOf {
+        typeid: TypeID,
+    },
     Call(ExprCall),
     Access(ExprAccess),
     Path(PathExpr),
@@ -101,34 +112,6 @@ pub enum Expr {
     Assign(ExprAssign),
     If(ExprIf),
     Loop(Block),
-}
-
-impl Expr {
-    pub fn type_id(&self) -> TypeID {
-        match self {
-            Expr::Value(_, typeid) => *typeid,
-            Expr::BinaryOp { typeid, .. } => *typeid,
-            Expr::UnaryOp {
-                op: _,
-                expr: _,
-                typeid,
-            } => *typeid,
-            Expr::Call(call) => call.typeid,
-            Expr::Access(access) => access.typeid,
-            Expr::If(if_expr) => if_expr.then_branch.typeid,
-            Expr::Path(path) => path.typeid,
-            Expr::Reinterpret {
-                inner: _,
-                from: _,
-                to,
-            } => *to,
-            Expr::Assign(assign) => assign.right.type_id(),
-            Expr::Loop(block) => block.typeid,
-            Expr::ProcPath(proc) => proc.typeid,
-            _ => unimplemented!("{:?}", self),
-            // Expr::Init(init) => init.path.segments.last().unwrap().name.type_id,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

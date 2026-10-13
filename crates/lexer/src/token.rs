@@ -98,7 +98,9 @@ pub enum TokenKind<'a> {
 
     // Literals
     /// Integer literal with optional suffix (decimal, hex, binary, octal).
-    #[regex(r"((0[xX][0-9a-fA-F]+|0b[01]+|0[0-7]+|[0-9]+)(u8|u16|u32|u64|i8|i16|i32|i64)?)")]
+    #[regex(
+        r"((0[xX][0-9a-fA-F]+|0b[01]+|0[0-7]+|[0-9]+)(u8|u16|u32|u64|i8|i16|i32|i64|usize|isize)?)"
+    )]
     Integer(&'a str),
     /// Floating-point literal with optional exponent.
     #[regex(r"([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)([eE][+-]?[0-9]+)?")]

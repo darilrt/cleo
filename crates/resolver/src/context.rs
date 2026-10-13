@@ -1,4 +1,5 @@
 use ast::Type;
+use errors::Error;
 use types::{
     ScopeID, TypeID, TypeInterner,
     defs::{Signedness, TypeDef},
@@ -68,7 +69,7 @@ impl Context {
         self.primitives = primitives;
     }
 
-    pub fn resolve_id(&mut self, scope: ScopeID, ast: &Type) -> Result<TypeID, String> {
+    pub fn resolve_id(&mut self, scope: ScopeID, ast: &Type) -> Result<TypeID, Error> {
         match ast {
             Type::Ptr(is_const, node) => {
                 let pointee = self.resolve_id(scope, node)?;
@@ -113,7 +114,8 @@ impl Context {
                                     return Err(format!(
                                         "Expected module in path, found {:?}",
                                         def.kind
-                                    ));
+                                    )
+                                    .into());
                                 }
                             },
                             None => scope,
@@ -149,7 +151,8 @@ impl Context {
                                 return Err(format!(
                                     "Definition for '{}' does not have a type",
                                     def.name
-                                ));
+                                )
+                                .into());
                             };
 
                             typeid
@@ -187,6 +190,8 @@ impl Context {
                 },
                 n
             ),
+            TypeDef::USize => "usize".to_string(),
+            TypeDef::ISize => "isize".to_string(),
             TypeDef::Float(n) => format!("f{}", n),
             TypeDef::Bool => "bool".to_string(),
             TypeDef::Empty => "void".to_string(),
@@ -246,66 +251,73 @@ impl Context {
 
 #[derive(Debug, Clone, Default)]
 pub struct Primitives {
-    pub nothing: TypeID,
-    pub bool_: TypeID,
-    pub u8_: TypeID,
-    pub u16_: TypeID,
-    pub u32_: TypeID,
-    pub u64_: TypeID,
-    pub i8_: TypeID,
-    pub i16_: TypeID,
-    pub i32_: TypeID,
-    pub i64_: TypeID,
-    pub f32_: TypeID,
-    pub f64_: TypeID,
+    pub nothing_t: TypeID,
+    pub bool_t: TypeID,
+    pub u8_t: TypeID,
+    pub u16_t: TypeID,
+    pub u32_t: TypeID,
+    pub u64_t: TypeID,
+    pub i8_t: TypeID,
+    pub i16_t: TypeID,
+    pub i32_t: TypeID,
+    pub i64_t: TypeID,
+    pub f32_t: TypeID,
+    pub f64_t: TypeID,
+    pub usize_t: TypeID,
+    pub isize_t: TypeID,
 }
 
 impl Primitives {
     pub fn is_integer(&self, typeid: TypeID) -> bool {
-        typeid == self.i8_
-            || typeid == self.i16_
-            || typeid == self.i32_
-            || typeid == self.i64_
-            || typeid == self.u8_
-            || typeid == self.u16_
-            || typeid == self.u32_
-            || typeid == self.u64_
+        typeid == self.i8_t
+            || typeid == self.i16_t
+            || typeid == self.i32_t
+            || typeid == self.i64_t
+            || typeid == self.u8_t
+            || typeid == self.u16_t
+            || typeid == self.u32_t
+            || typeid == self.u64_t
+            || typeid == self.usize_t
+            || typeid == self.isize_t
     }
 
     pub fn is_negatable(&self, typeid: TypeID) -> bool {
-        typeid == self.i8_
-            || typeid == self.i16_
-            || typeid == self.i32_
-            || typeid == self.i64_
-            || typeid == self.f32_
-            || typeid == self.f64_
+        typeid == self.i8_t
+            || typeid == self.i16_t
+            || typeid == self.i32_t
+            || typeid == self.i64_t
+            || typeid == self.isize_t
+            || typeid == self.f32_t
+            || typeid == self.f64_t
     }
 
     pub fn is_bool(&self, typeid: TypeID) -> bool {
-        typeid == self.bool_
+        typeid == self.bool_t
     }
 
     pub fn is_numeric(&self, typeid: TypeID) -> bool {
-        typeid == self.f32_ || typeid == self.f64_ || self.is_integer(typeid)
+        typeid == self.f32_t || typeid == self.f64_t || self.is_integer(typeid)
     }
 
     pub fn is_comparable(&self, ty: TypeID) -> bool {
-        self.is_numeric(ty) || ty == self.bool_
+        self.is_numeric(ty) || ty == self.bool_t
     }
 
     pub fn c_name(&self, ty: TypeID) -> Option<&'static str> {
         Some(match ty {
-            t if t == self.bool_ => "bool",
-            t if t == self.i8_ => "int8_t",
-            t if t == self.i16_ => "int16_t",
-            t if t == self.i32_ => "int32_t",
-            t if t == self.i64_ => "int64_t",
-            t if t == self.u8_ => "uint8_t",
-            t if t == self.u16_ => "uint16_t",
-            t if t == self.u32_ => "uint32_t",
-            t if t == self.u64_ => "uint64_t",
-            t if t == self.f32_ => "float",
-            t if t == self.f64_ => "double",
+            t if t == self.bool_t => "bool",
+            t if t == self.i8_t => "int8_t",
+            t if t == self.i16_t => "int16_t",
+            t if t == self.i32_t => "int32_t",
+            t if t == self.i64_t => "int64_t",
+            t if t == self.u8_t => "uint8_t",
+            t if t == self.u16_t => "uint16_t",
+            t if t == self.u32_t => "uint32_t",
+            t if t == self.u64_t => "uint64_t",
+            t if t == self.f32_t => "float",
+            t if t == self.f64_t => "double",
+            t if t == self.usize_t => "size_t",
+            t if t == self.isize_t => "ptrdiff_t",
             _ => return None,
         })
     }

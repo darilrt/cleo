@@ -53,6 +53,12 @@ impl<'a> Codegen<'a> {
                     }
                     writeln!(definitions, "}};\n")?;
                 }
+                DefKind::TypeAlias(def) => {
+                    any_def = true;
+                    write!(buffer, "typedef ")?;
+                    emit_type(self.ctx, buffer, def.typeid, &mangled_name)?;
+                    writeln!(buffer, ";")?;
+                }
                 _ => {}
             }
         }
@@ -181,8 +187,7 @@ pub fn emit_type<'a>(
         }
         TypeDef::Empty => write!(buffer, "void {}", ident),
         TypeDef::Bool => write!(buffer, "bool {}", ident),
-        TypeDef::Int(size, sign) => write!(buffer, "{}{} {}", sign.to_prefix(), size, ident),
-        TypeDef::Float(size) => write!(buffer, "f{} {}", size, ident),
+        TypeDef::Int(..) | TypeDef::Float(..) | TypeDef::USize | TypeDef::ISize => unreachable!(),
         TypeDef::Pointer { pointee } => {
             emit_type(ctx, buffer, *pointee, "")?;
             write!(buffer, "* {}", ident)
@@ -200,7 +205,8 @@ pub fn emit_type<'a>(
                 .get_def(*defid)
                 .ok_or_else(|| format!("Def {} does not exists", defid.0))?;
 
-            write!(buffer, "{} {}", def.name, ident)
+            let mangled_name = def.get_mangled_name(ctx)?;
+            write!(buffer, "{} {}", mangled_name, ident)
         }
     }?;
 

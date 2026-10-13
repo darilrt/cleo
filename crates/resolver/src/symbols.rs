@@ -43,6 +43,7 @@ impl Definition {
 
                 Ok(format!("{}_{}", scope_path, sig.name))
             }
+            DefKind::TypeAlias(_) => Ok(format!("{}_{}", scope_path, self.name)),
             _ => Ok(self.name.clone()),
         }
     }

@@ -6,6 +6,8 @@ pub enum TypeDef {
     Empty,
     Int(u8, Signedness),
     Float(u8),
+    USize,
+    ISize,
     UserDef(DefID),
     Const(TypeID),
     FnPointer(FnPointerType),

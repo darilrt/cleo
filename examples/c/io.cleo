@@ -1,4 +1,18 @@
 
 @extern
-@no_emit
+@no_mangle
 proc printf(s: *const u8)
+
+@extern
+@no_mangle
+proc fprintf(file: *File, content: *const u8)
+
+type File = c_void
+
+@extern
+@no_mangle
+proc fopen(path: *const u8, mode: *const u8) *File
+
+@extern
+@no_mangle
+proc fclose(fptr: *File)

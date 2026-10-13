@@ -1,0 +1,56 @@
+import c.io
+import c.mem
+
+type Color = struct {
+    r: u8
+    g: u8
+    b: u8
+}
+
+type Image = struct {
+    width: usize
+    height: usize
+    pixels: *Color
+}
+
+proc Image_new(width: usize, height: usize) Image {
+    image: Image
+    image.width = width
+    image.height = height
+    image.pixels = cast[*Color](mem.malloc(size_of[Color]() * width * height))
+    image
+}
+
+proc Image_set(image: *const Image, x: usize, y: usize, color: Color) {
+    *cast[*Color](cast[usize](image.pixels) + (x * y) * size_of[Color]()) = color
+}
+
+proc generate_test_gradient(image: *Image) {
+    y: usize = 0usize
+    loop {
+        if y >= image.height { break }
+
+        x: usize = 0usize
+        loop {
+            if x >= image.width { break }
+
+            color: Color
+            color.r = cast[u8](x)
+            color.g = cast[u8](y)
+            color.b = 0u8
+
+            Image_set(image, x, y, color)
+
+            x += 1usize 
+        }
+        y += 1usize
+    }   
+}
+
+@no_mangle
+proc main() i32 {
+    image: Image = Image_new(256usize, 256usize)
+    
+    io.printf(cast[*u8](&"Hello, World!\n"))
+    0
+}
