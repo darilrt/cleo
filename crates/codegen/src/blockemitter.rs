@@ -152,29 +152,28 @@ impl<'a, 's> BlockEmitter<'a, 's> {
                 let is_from_ptr = matches!(from_type, TypeDef::Pointer { .. });
                 let is_to_ptr = matches!(to_type, TypeDef::Pointer { .. });
 
-                let is_from_int = matches!(from_type, TypeDef::Int(_, _));
-                let is_to_int = matches!(to_type, TypeDef::Int(_, _));
+                let is_from_int = self.ctx.primitives.is_integer(*from);
+                let is_to_int = self.ctx.primitives.is_integer(*to);
 
                 if (is_from_ptr && is_to_int)
                     || (is_from_int && is_to_ptr)
                     || (is_from_ptr && is_to_ptr)
                 {
-                    // Conversión directa escalar/puntero: (ToType)(expr)
-                    // Cubre: T* -> Int, Int -> T*, T* -> U*
+                    // T* -> Int, Int -> T*, T* -> U*
                     write!(buffer, "(")?;
                     emit_type(self.ctx, buffer, *to, "")?;
                     write!(buffer, ")(")?;
                     self.emit_expr(buffer, expr)?;
                     write!(buffer, ")")?;
                 } else if is_from_ptr {
-                    // Caso: T* -> Valor U por desreferencia: *(U*)(ptr)
+                    // T* -> Valor U by derreferencing: *(U*)(ptr)
                     write!(buffer, "*(")?;
                     emit_type(self.ctx, buffer, *to, "")?;
                     write!(buffer, "*)(")?;
                     self.emit_expr(buffer, expr)?;
                     write!(buffer, ")")?;
                 } else {
-                    // Caso por valor general: T -> U mediante Type Punning: *(U*)&(expr)
+                    // T -> U by type punning: *(U*)&(expr)
                     write!(buffer, "*(")?;
                     emit_type(self.ctx, buffer, *to, "")?;
                     write!(buffer, "*)&(")?;
