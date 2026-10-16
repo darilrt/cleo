@@ -47,10 +47,21 @@ proc generate_test_gradient(image: *Image) {
     }   
 }
 
+proc Image_save(path: *const u8) {
+    file: *io.File = io.fopen(
+        cast[*u8](&"test.ppm"),
+        cast[*u8](&"w")
+    )
+
+    
+}
+
 @no_mangle
 proc main() i32 {
     image: Image = Image_new(256usize, 256usize)
     
+    generate_test_gradient(&image)
+
     io.printf(cast[*u8](&"Hello, World!\n"))
     0
 }
